@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>CONTROLE DE JORNADA MOTORISTAS - LINE HAUL</title>
+    <link rel="icon" type="image/png" href="icon.png">
+    <style>
+        /* PALETA CEVA */
+        :root {
+            --azul-ceva: #09124F;
+            --azul-claro: #1D4289;
+            --azul-cyan: #6CACE4;
+            --vermelho-ceva: #FF8674;
+            --cinza-escuro: #666666;
+            --cinza-medio: #999999;
+            --fundo: #E3E3E3;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: var(--fundo); 
+            margin: 0; 
+            padding: 20px; 
+            color: #333;
+        }
+
+        .header-principal {
+            background-color: var(--azul-ceva);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-radius: 8px 8px 0 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        /* NAVEGAÇÃO DE ABAS */
+        .tabs {
+            display: flex;
+            background-color: var(--azul-claro);
+            padding: 10px 20px 0 20px;
+            border-radius: 0 0 8px 8px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background-color: transparent;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            opacity: 0.7;
+            transition: 0.3s;
+        }
+        .tab:hover { opacity: 1; }
+        .tab.active {
+            background-color: var(--fundo);
+            color: var(--azul-ceva);
+            border-radius: 6px 6px 0 0;
+            opacity: 1;
+        }
+
+        /* CORREÇÃO DO BUG DAS ABAS AQUI! */
+        .tab-content { 
+            display: none; 
+            flex-direction: column; 
+            gap: 20px; 
+        }
+        .tab-content.active { 
+            display: flex; 
+        }
+
+        .grid-topo { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+        .card { 
+            background: white; 
+            border-radius: 6px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+            overflow: hidden; 
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            background-color: var(--cinza-escuro);
+            color: white;
+            padding: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .contadores { display: flex; gap: 10px; font-size: 12px; }
+        .cont-box { background-color: #444; padding: 5px 15px; border-radius: 4px; text-align: center; border: 1px solid #333;}
+        .cont-box span.vermelho { color: var(--vermelho-ceva); font-size: 16px; font-weight: bold; display: block;}
+        .cont-box span.branco { color: #fff; font-size: 16px; font-weight: bold; display: block;}
+        
+        .tabela-wrapper { max-height: 350px; overflow-y: auto; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th {
+            background-color: var(--azul-ceva);
+            color: white; padding: 12px 10px; text-align: left;
+            position: sticky; top: 0; z-index: 10;
+            cursor: pointer;
+        }
+        th:hover { background-color: var(--azul-claro); }
+        th.sort-asc::after { content: ' ▲'; }
+        th.sort-desc::after { content: ' ▼'; }
+
+        td { padding: 10px; border-bottom: 1px solid #eee; }
+        tr:nth-child(even) { background-color: #fcfcfc; }
+        tr:hover { background-color: #f1f5f9; }
+        
+        .status-descanso { color: var(--cinza-escuro); font-weight: bold; }
+        .status-alerta { color: white; background-color: var(--vermelho-ceva); font-weight: bold; text-align: center; border-radius: 4px; padding: 4px;}
+        .vazio { text-align: center; padding: 30px; color: var(--cinza-medio); font-style: italic;}
+        .texto-vermelho { color: var(--vermelho-ceva); font-weight: bold; }
+        
+        /* Estilos específicos para a aba de Auditoria */
+        .filtro-container { padding: 15px; background-color: #f0f0f0; border-bottom: 1px solid #ddd; }
+        .filtro-input { padding: 8px; width: 300px; border: 1px solid #ccc; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <div class="header-principal">CONTROLE DE JORNADA MOTORISTAS - LINE HAUL</div>
+    
+    <div class="tabs">
+        <button class="tab active" onclick="mudarAba('visao-geral', this)">Visão Geral Operacional</button>
+        <button class="tab" onclick="mudarAba('historico-geral', this)">Histórico Geral e Auditoria</button>
+    </div>
+
+    <div id="visao-geral" class="tab-content active">
+        <div class="grid-topo">
+            <div class="card">
+                <div class="card-header">
+                    Motoristas em descanso
+                    <div class="contadores">
+                        <div class="cont-box">Trabalhando (>12h)<span class="vermelho" id="tot-trab">0</span></div>
+                        <div class="cont-box">Descansando<span class="branco" id="tot-desc">0</span></div>
+                    </div>
+                </div>
+                <div class="tabela-wrapper">
+                    <table id="tbl-descanso">
+                        <thead><tr><th onclick="ordenarTabela(this, 0)">Motorista</th><th onclick="ordenarTabela(this, 1)">Horas Trabalhadas</th><th onclick="ordenarTabela(this, 2)">Fim Descanso</th><th onclick="ordenarTabela(this, 3)">Status</th></tr></thead>
+                        <tbody id="tb-descanso"><tr><td colspan="4" class="vazio">Carregando...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Rotas maior que 12 Horas <div class="contadores"><div class="cont-box">Total<span class="branco" id="tot-rotas">0</span></div></div></div>
+                <div class="tabela-wrapper">
+                    <table id="tbl-rotas">
+                        <thead><tr><th onclick="ordenarTabela(this, 0)">Viagem</th><th onclick="ordenarTabela(this, 1)">Motorista</th><th onclick="ordenarTabela(this, 2)">Transit Time</th><th onclick="ordenarTabela(this, 3)">Status</th></tr></thead>
+                        <tbody id="tb-rotas"><tr><td colspan="4" class="vazio">Carregando...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Monitoramento jornada de trabalho - Maior que 12 Horas <div class="contadores"><div class="cont-box">Total<span class="branco" id="tot-jornada">0</span></div></div></div>
+            <div class="tabela-wrapper">
+                <table id="tbl-jornada">
+                    <thead><tr><th onclick="ordenarTabela(this, 0)">Motorista</th><th onclick="ordenarTabela(this, 1)">Viagem de Estouro</th><th onclick="ordenarTabela(this, 2)">Início da Jornada</th><th onclick="ordenarTabela(this, 3)">Fim da Última Viagem</th><th onclick="ordenarTabela(this, 4)">Horas Acumuladas</th></tr></thead>
+                    <tbody id="tb-jornada"><tr><td colspan="5" class="vazio">Carregando...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Viagens iniciadas antes de completar o descanso <div class="contadores"><div class="cont-box">Total<span class="branco" id="tot-viola">0</span></div></div></div>
+            <div class="tabela-wrapper">
+                <table id="tbl-viola">
+                    <thead><tr><th onclick="ordenarTabela(this, 0)">Viagem</th><th onclick="ordenarTabela(this, 1)">Motorista</th><th onclick="ordenarTabela(this, 2)">Fim Anterior</th><th onclick="ordenarTabela(this, 3)">Início Atual</th><th onclick="ordenarTabela(this, 4)">Descanso Feito</th><th onclick="ordenarTabela(this, 5)">Faltante</th></tr></thead>
+                    <tbody id="tb-violacoes"><tr><td colspan="6" class="vazio">Carregando...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="historico-geral" class="tab-content">
+        <div class="card">
+            <div class="card-header">Auditoria Completa (Histórico Consolidado)</div>
+            
+            <div class="filtro-container">
+                <input type="text" id="filtro-auditoria" class="filtro-input" placeholder="Pesquisar por Motorista ou Viagem..." onkeyup="filtrarAuditoria()">
+            </div>
+
+            <div class="tabela-wrapper" style="max-height: 600px;">
+                <table id="tbl-auditoria">
+                    <thead>
+                        <tr>
+                            <th onclick="ordenarTabela(this, 0)">Data do Registro</th>
+                            <th onclick="ordenarTabela(this, 1)">Tipo de Evento</th>
+                            <th onclick="ordenarTabela(this, 2)">Motorista</th>
+                            <th onclick="ordenarTabela(this, 3)">Viagem Relacionada</th>
+                            <th onclick="ordenarTabela(this, 4)">Detalhes (Horas/Faltante)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-auditoria">
+                        <tr><td colspan="5" class="vazio">Carregando histórico consolidado...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // COLOQUE SUA URL AQUI
+        // ==========================================
+        const API_URL = 'https://script.google.com/macros/s/AKfycbz0kYNJi-Vt2asczAnr0JlhsMlwFZI8XMMwrZ20t9I2EBLhDmpEAB5d2rmZ90iyaPgU/exec';
+
+        // Lógica de Abas
+        function mudarAba(abaId, botaoClicado) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(abaId).classList.add('active');
+            botaoClicado.classList.add('active');
+        }
+
+        const formataData = (isoStr) => {
+            if (!isoStr) return '-';
+            let d = new Date(isoStr);
+            if(isNaN(d)) return '-';
+            return d.toLocaleString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        };
+
+        // Função de Ordenação de Tabelas
+        function ordenarTabela(th, colIndex) {
+            const table = th.closest("table");
+            const tbody = table.querySelector("tbody");
+            const rows = Array.from(tbody.querySelectorAll("tr"));
+            if (rows.length === 0 || rows[0].querySelector("td").classList.contains("vazio")) return;
+
+            let asc = !th.classList.contains("sort-asc");
+            table.querySelectorAll("th").forEach(t => t.classList.remove("sort-asc", "sort-desc"));
+            th.classList.add(asc ? "sort-asc" : "sort-desc");
+
+            rows.sort((a, b) => {
+                let valA = a.children[colIndex].innerText.trim();
+                let valB = b.children[colIndex].innerText.trim();
+                
+                let numA = parseFloat(valA.replace(/[^\d.-]/g, ''));
+                let numB = parseFloat(valB.replace(/[^\d.-]/g, ''));
+                if(!isNaN(numA) && !isNaN(numB)) {
+                    return asc ? numA - numB : numB - numA;
+                }
+                return asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            });
+            tbody.append(...rows);
+        }
+
+        // Filtro para a tabela de auditoria
+        function filtrarAuditoria() {
+            let input = document.getElementById("filtro-auditoria");
+            let filter = input.value.toUpperCase();
+            let table = document.getElementById("tbl-auditoria");
+            let tr = table.getElementsByTagName("tr");
+
+            for (let i = 1; i < tr.length; i++) { 
+                let tds = tr[i].getElementsByTagName("td");
+                let match = false;
+                for(let j=0; j < tds.length; j++) {
+                    if (tds[j]) {
+                        if (tds[j].innerText.toUpperCase().indexOf(filter) > -1) {
+                            match = true;
+                            break;
+                        }
+                    }
+                }
+                tr[i].style.display = match ? "" : "none";
+            }
+        }
+
+        async function atualizarPainel() {
+            try {
+                const req = await fetch(API_URL);
+                const db = await req.json();
+
+                // --- ATUALIZAÇÃO DA VISÃO GERAL ---
+
+                // 1. Descanso
+                let tbDescanso = '', tDesc = 0, tTrab = 0;
+                db.descanso.forEach((linha) => {
+                    let status = linha[4]; 
+                    if (status === 'EM DESCANSO') tDesc++;
+                    if (status === 'ALERTA: TRABALHANDO') tTrab++;
+                    
+                    let statusHTML = status === 'ALERTA: TRABALHANDO' ? `<div class="status-alerta">${status}</div>` : `<div class="status-descanso">${status}</div>`;
+                    tbDescanso += `<tr><td>${linha[0]}</td><td class="texto-vermelho">${linha[2]}</td><td>${formataData(linha[3])}</td><td>${statusHTML}</td></tr>`;
+                });
+                document.getElementById('tot-trab').innerText = tTrab;
+                document.getElementById('tot-desc').innerText = tDesc;
+                document.getElementById('tb-descanso').innerHTML = tbDescanso || '<tr><td colspan="4" class="vazio">Nenhum motorista na tabela de descanso.</td></tr>';
+
+                // 2. Rotas Longas
+                let tbRotas = '';
+                db.rotasLongas.reverse().forEach(linha => {
+                    tbRotas += `<tr><td>${linha[0]}</td><td>${linha[1]}</td><td><b>${linha[4]}</b></td><td>${linha[5]}</td></tr>`;
+                });
+                document.getElementById('tot-rotas').innerText = db.rotasLongas.length;
+                document.getElementById('tb-rotas').innerHTML = tbRotas || '<tr><td colspan="4" class="vazio">Nenhuma rota superior a 12 horas.</td></tr>';
+
+                // 3. Jornada Estourada
+                let tbJornada = '';
+                db.jornadaEstourada.reverse().forEach(linha => {
+                    tbJornada += `<tr><td>${linha[0]}</td><td>${linha[1]}</td><td>${formataData(linha[2])}</td><td>${formataData(linha[3])}</td><td class="texto-vermelho">${linha[4]}</td></tr>`;
+                });
+                document.getElementById('tot-jornada').innerText = db.jornadaEstourada.length;
+                document.getElementById('tb-jornada').innerHTML = tbJornada || '<tr><td colspan="5" class="vazio">Nenhum motorista com jornada superior a 12 horas.</td></tr>';
+
+                // 4. Violações de Descanso
+                let tbViolacoes = '';
+                db.violacoes.reverse().forEach(linha => {
+                    tbViolacoes += `<tr><td>${linha[1]}</td><td>${linha[0]}</td><td>${formataData(linha[2])}</td><td>${formataData(linha[3])}</td><td>${linha[4]}</td><td class="texto-vermelho">${linha[5]}</td></tr>`;
+                });
+                document.getElementById('tot-viola').innerText = db.violacoes.length;
+                document.getElementById('tb-violacoes').innerHTML = tbViolacoes || '<tr><td colspan="6" class="vazio">Nenhuma violação encontrada.</td></tr>';
+
+                // --- ATUALIZAÇÃO DO HISTÓRICO GERAL E AUDITORIA ---
+                
+                let tbAuditoria = '';
+                let registrosAuditoria = [];
+
+                db.rotasLongas.forEach(r => {
+                    registrosAuditoria.push({
+                        dataStr: r[3],
+                        tipo: "Rota Longa (>12h)",
+                        motorista: r[1],
+                        viagem: r[0],
+                        detalhes: `Transit Time: ${r[4]} | Status: ${r[5]}`
+                    });
+                });
+
+                db.jornadaEstourada.forEach(j => {
+                    registrosAuditoria.push({
+                        dataStr: j[3],
+                        tipo: "Estouro de Jornada Contínua",
+                        motorista: j[0],
+                        viagem: j[1],
+                        detalhes: `Horas Acumuladas: ${j[4]} | Desde: ${formataData(j[2])}`
+                    });
+                });
+
+                db.violacoes.forEach(v => {
+                    registrosAuditoria.push({
+                        dataStr: v[3],
+                        tipo: "Violação de Descanso (<11h)",
+                        motorista: v[0],
+                        viagem: v[1],
+                        detalhes: `Descanso feito: ${v[4]} | Tempo faltante: ${v[5]}`
+                    });
+                });
+
+                registrosAuditoria.sort((a, b) => new Date(b.dataStr) - new Date(a.dataStr));
+
+                registrosAuditoria.forEach(reg => {
+                    let corTipo = "";
+                    if (reg.tipo.includes("Violação")) corTipo = "color: var(--vermelho-ceva); font-weight: bold;";
+                    else if (reg.tipo.includes("Jornada")) corTipo = "color: var(--azul-ceva); font-weight: bold;";
+                    else corTipo = "color: var(--cinza-escuro);";
+
+                    tbAuditoria += `<tr>
+                                        <td>${formataData(reg.dataStr)}</td>
+                                        <td style="${corTipo}">${reg.tipo}</td>
+                                        <td>${reg.motorista}</td>
+                                        <td>${reg.viagem}</td>
+                                        <td>${reg.detalhes}</td>
+                                    </tr>`;
+                });
+
+                document.getElementById('tb-auditoria').innerHTML = tbAuditoria || '<tr><td colspan="5" class="vazio">Nenhum registro de auditoria encontrado.</td></tr>';
+
+            } catch (e) {
+                console.error("Erro na API: ", e);
+            }
+        }
+
+        atualizarPainel();
+        setInterval(atualizarPainel, 180000); 
+    </script>
+</body>
+</html>
