@@ -84,12 +84,43 @@ body.tv .chip .c-n{font-size:40px}
 body.tv .abs-n{font-size:34px}
 body.tv .pnum .pn{font-size:36px}
 body.tv .grid{gap:18px}
+
+/* selects de filtro */
+.datepick select{background:#0f1620;border:1px solid var(--line);border-radius:8px;color:var(--ink);
+  font-family:var(--sans);font-size:14px;padding:7px 9px;color-scheme:dark}
+.ctl{display:flex;align-items:center;gap:8px}
+.hidden{display:none !important}
+
+/* hora a hora por galpão */
+.hh{display:flex;gap:14px;align-items:stretch;width:100%}
+.hh-rows{flex:1;display:flex;flex-direction:column;gap:12px;justify-content:center}
+.hh-row{display:grid;grid-template-columns:120px repeat(3,1fr);gap:10px;align-items:center}
+.hh-g{font-family:var(--cond);font-weight:700;font-size:17px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--gc,var(--amber));border-left:3px solid var(--gc,var(--amber));padding-left:10px}
+.hh-lib{width:190px;display:flex;flex-direction:column;justify-content:center;align-items:center;
+  background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px}
+.hh-lib .c-n{font-family:var(--mono);font-weight:600;font-size:44px;line-height:1;color:var(--good)}
+.hh-lib .c-l{font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:6px}
+@media(max-width:820px){.hh{flex-direction:column}.hh-lib{width:auto}
+  .hh-row{grid-template-columns:1fr 1fr 1fr;}.hh-g{grid-column:1/-1;border-left:none;padding-left:0}}
+
+/* slides do modo TV */
+body.tv .panel{display:none}
+body.tv.sa .panel[data-slide="a"]{display:flex}
+body.tv.sb .panel[data-slide="b"]{display:flex}
+.slide-ind{display:none}
+body.tv .slide-ind{display:flex;gap:6px;justify-content:center;margin-top:12px}
+body.tv .slide-ind i{width:26px;height:5px;border-radius:3px;background:var(--line2)}
+body.tv.sa .slide-ind i:nth-child(1),body.tv.sb .slide-ind i:nth-child(2){background:var(--amber)}
+#grid{transition:transform .3s ease}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,211,154,.5)}70%{box-shadow:0 0 0 7px rgba(47,211,154,0)}100%{box-shadow:0 0 0 0 rgba(47,211,154,0)}}
 
 /* ---------- grid ---------- */
 .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;
-  padding:16px 16px 18px;position:relative;overflow:hidden}
+  padding:16px 16px 18px;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.panel .phead{flex:none}
+.pbody{flex:1;display:flex;flex-direction:column;justify-content:center}
 .panel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent,var(--line2))}
 .col-3{grid-column:span 3} .col-4{grid-column:span 4} .col-5{grid-column:span 5}
 .col-6{grid-column:span 6} .col-7{grid-column:span 7} .col-8{grid-column:span 8}
@@ -194,9 +225,18 @@ body.tv .grid{gap:18px}
     <button id="pMes" onclick="trocarPeriodo('mes')">Mês</button>
   </div>
   <div class="datepick">
-    <label>Data</label>
-    <input type="date" id="dashDate" onchange="trocarData()">
-    <button id="btnHoje" onclick="voltarHoje()">Hoje</button>
+    <div class="ctl" id="ctlDia">
+      <input type="date" id="dashDate" onchange="atualizarFiltro()">
+      <button id="btnHoje" onclick="voltarHoje()">Hoje</button>
+    </div>
+    <div class="ctl hidden" id="ctlSemana">
+      <select id="selWeek" onchange="atualizarFiltro()"></select>
+      <select id="selWeekYear" onchange="atualizarFiltro()"></select>
+    </div>
+    <div class="ctl hidden" id="ctlMes">
+      <select id="selMonth" onchange="atualizarFiltro()"></select>
+      <select id="selMonthYear" onchange="atualizarFiltro()"></select>
+    </div>
     <button id="btnTV" onclick="toggleTV()" title="Tela cheia">TV</button>
   </div>
   <div>
@@ -207,62 +247,59 @@ body.tv .grid{gap:18px}
 
 <div class="grid" id="grid">
   <!-- QHSE -->
-  <section class="panel col-3" style="--accent:var(--bad)">
+  <section class="panel col-4" data-slide="a" style="--accent:var(--bad)">
     <div class="phead"><span class="tag">QHSE</span><span class="desc">segurança</span></div>
-    <div class="stat-row">
+    <div class="pbody"><div class="stat-row">
       <div class="stat" id="q_acid"><div class="n">–</div><div class="l">Acidentes</div></div>
       <div class="stat" id="q_inc"><div class="n">–</div><div class="l">Incidentes</div></div>
       <div class="stat" id="q_oco"><div class="n">–</div><div class="l">Ocorrências</div></div>
-    </div>
+    </div></div>
   </section>
 
   <!-- RH -->
-  <section class="panel col-5" style="--accent:var(--info)">
+  <section class="panel col-8" data-slide="a" style="--accent:var(--info)">
     <div class="phead"><span class="tag">RH</span><span class="desc">HC planejado × disponível · absenteísmo</span></div>
-    <div class="abs-row" id="rhAbs"></div>
-    <div id="rh"></div>
-  </section>
-
-  <!-- EQUIPAMENTOS / PÁTIO -->
-  <section class="panel col-4" style="--accent:var(--amber)">
-    <div class="phead"><span class="tag">Equipamentos</span><span class="desc">pátio · vazios e em andamento por galpão</span></div>
-    <div class="patio" id="patio"></div>
-  </section>
-
-  <!-- PROGRAMAÇÃO -->
-  <section class="panel col-6" style="--accent:var(--info)">
-    <div class="phead"><span class="tag">Programação</span><span class="desc">volume e veículos · programado × realizado por galpão</span></div>
-    <div id="prog"></div>
-  </section>
-
-  <!-- PERFORMANCE: expedido x bipado -->
-  <section class="panel col-6" style="--accent:var(--good)">
-    <div class="phead"><span class="tag">Performance</span><span class="desc">total expedido (CTE) × bipado</span></div>
-    <div class="kpi-duo">
-      <div class="kpi"><div class="k-l">Volume CTE</div><div class="k-n" id="cte">–</div><div class="k-sub">emitido · GM Sorocaba</div></div>
-      <div class="kpi"><div class="k-l">Volume bipado</div><div class="k-n" id="lido">–</div><div class="k-sub">lido na operação</div></div>
-      <div class="gauge"><div class="g-pct" id="bipPct">–</div><div class="g-l">Aderência</div></div>
+    <div class="pbody">
+      <div class="abs-row" id="rhAbs"></div>
+      <div id="rh"></div>
     </div>
   </section>
 
-  <!-- OPERACAO chips -->
-  <section class="panel col-12" style="--accent:var(--amber)">
-    <div class="phead"><span class="tag">Hora a hora</span><span class="desc">docas · veículos vazios · liberados · em andamento</span></div>
-    <div class="chips" id="ops"></div>
+  <!-- PROGRAMAÇÃO -->
+  <section class="panel col-6" data-slide="a" style="--accent:var(--info)">
+    <div class="phead"><span class="tag">Programação</span><span class="desc">volume e veículos · programado × realizado por galpão</span></div>
+    <div class="pbody" id="prog"></div>
+  </section>
+
+  <!-- PERFORMANCE: expedido x bipado -->
+  <section class="panel col-6" data-slide="a" style="--accent:var(--good)">
+    <div class="phead"><span class="tag">Performance</span><span class="desc">total expedido (CTE) × bipado</span></div>
+    <div class="pbody"><div class="kpi-duo">
+      <div class="kpi"><div class="k-l">Volume CTE</div><div class="k-n" id="cte">–</div><div class="k-sub">emitido · GM Sorocaba</div></div>
+      <div class="kpi"><div class="k-l">Volume bipado</div><div class="k-n" id="lido">–</div><div class="k-sub">lido na operação</div></div>
+      <div class="gauge"><div class="g-pct" id="bipPct">–</div><div class="g-l">Aderência</div></div>
+    </div></div>
+  </section>
+
+  <!-- HORA A HORA (docas + pátio por galpão + liberados) -->
+  <section class="panel col-12" data-slide="b" style="--accent:var(--amber)">
+    <div class="phead"><span class="tag">Hora a hora</span><span class="desc">docas · vazios · em andamento por galpão · liberados</span></div>
+    <div class="pbody" id="hh"></div>
   </section>
 
   <!-- ONDAS -->
-  <section class="panel col-6" style="--accent:var(--amber)">
+  <section class="panel col-6" data-slide="b" style="--accent:var(--amber)">
     <div class="phead"><span class="tag">Ondas</span><span class="desc">controle carreg. · NF GM · CTE · expedição</span></div>
     <div id="ondas"></div>
   </section>
 
   <!-- TIME LINE -->
-  <section class="panel col-6" style="--accent:var(--good)">
+  <section class="panel col-6" data-slide="b" style="--accent:var(--good)">
     <div class="phead"><span class="tag">Time line</span><span class="desc">jornada do veículo · chegada → liberação</span></div>
     <div id="timeline"></div>
   </section>
 </div>
+<div class="slide-ind"><i></i><i></i></div>
 
 <div class="foot">Scorecard Operação GM · dados via Google Sheets · atualização automática a cada 60s</div>
 
@@ -366,12 +403,7 @@ function render(d){
     bar("Turno 2 · Galpão 3", I.HC_DISPONIVEL_T2_P3, I.HC_PLANEJADO_T2_P3);
 
   // Equipamentos / pátio — vazios e em andamento por galpão
-  $("patio").innerHTML = [
-    ["Vazios · G2",I.VEICULOS_VAZIOS_P2,"var(--muted)"],
-    ["Vazios · G3",I.VEICULOS_VAZIOS_P3,"var(--muted)"],
-    ["Andamento · G2",I.VEICULOS_EM_ANDAMENTO_P2,"var(--amber)"],
-    ["Andamento · G3",I.VEICULOS_EM_ANDAMENTO_P3,"var(--amber)"],
-  ].map(([l,v,c])=>`<div class="pnum"><div class="pn" style="color:${c}">${fmt(v)}</div><div class="pl">${l}</div></div>`).join("");
+  // (movido para o painel Hora a hora)
 
   // Programação — volume + veículos (programado × realizado/disponível) por galpão
   $("prog").innerHTML =
@@ -387,16 +419,17 @@ function render(d){
   $("bipPct").textContent = Math.round(p*100)+"%";
   $("bipPct").style.color = stateColor(p);
 
-  // Ops chips — docas por galpão, liberados, e totais de pátio
-  const vazT=num(I.VEICULOS_VAZIOS_P2)+num(I.VEICULOS_VAZIOS_P3);
-  const andT=num(I.VEICULOS_EM_ANDAMENTO_P2)+num(I.VEICULOS_EM_ANDAMENTO_P3);
-  $("ops").innerHTML = [
-    ["Docas Galpão 2",I.DOCAS_EM_USO_P2,"var(--info)"],
-    ["Docas Galpão 3",I.DOCAS_EM_USO_P3,"var(--info)"],
-    ["Liberados",I.VEICULOS_LIBERADOS,"var(--good)"],
-    ["Vazios (total)",vazT,"var(--muted)"],
-    ["Em andamento (total)",andT,"var(--amber)"],
-  ].map(([l,v,c])=>`<div class="chip"><div class="c-n" style="color:${c}">${fmt(v)}</div><div class="c-l">${l}</div></div>`).join("");
+  // Hora a hora — duas linhas (Galpão 2 e 3): docas, vazios, em andamento + Liberados
+  const chip=(l,v,c)=>`<div class="chip"><div class="c-n" style="color:${c}">${fmt(v)}</div><div class="c-l">${l}</div></div>`;
+  const linhaG=(nome,cor,docas,vazios,and)=>
+    `<div class="hh-row"><span class="hh-g" style="--gc:${cor}">${nome}</span>`
+    +chip("Docas",docas,"var(--info)")+chip("Vazios",vazios,"var(--muted)")+chip("Em andamento",and,"var(--amber)")+`</div>`;
+  $("hh").innerHTML =
+    `<div class="hh-rows">`
+    + linhaG("Galpão 2","var(--info)", I.DOCAS_EM_USO_P2, I.VEICULOS_VAZIOS_P2, I.VEICULOS_EM_ANDAMENTO_P2)
+    + linhaG("Galpão 3","var(--amber)", I.DOCAS_EM_USO_P3, I.VEICULOS_VAZIOS_P3, I.VEICULOS_EM_ANDAMENTO_P3)
+    + `</div>`
+    + `<div class="hh-lib"><div class="c-n">${fmt(I.VEICULOS_LIBERADOS)}</div><div class="c-l">Liberados</div></div>`;
 
   // Ondas
   renderOndas(d.ondas);
@@ -474,74 +507,132 @@ function jsonp(params){
     document.body.appendChild(s);
   });
 }
-/* ---- data selecionada ('' = hoje/ao vivo) ---- */
-let SEL_DATE = "";   // formato dd/mm/aaaa
+/* ---- filtros de período ---- */
 function hojeBR(){ return new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"}); }
 function brParaISO(br){ const m=br.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m?`${m[3]}-${m[2]}-${m[1]}`:""; }
 function isoParaBR(iso){ const m=iso.match(/(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:""; }
 
 let SEL_PERIODO = "dia";
+let SEL_DATA = "";     // data representativa dd/mm/aaaa enviada ao servidor
+let SEL_LABEL = "AO VIVO";
+const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+/* ISO week helpers */
+function getISOWeek(d){
+  const t=new Date(d); t.setHours(0,0,0,0);
+  t.setDate(t.getDate()+3-((t.getDay()+6)%7));
+  const w1=new Date(t.getFullYear(),0,4);
+  return 1+Math.round(((t-w1)/86400000-3+((w1.getDay()+6)%7))/7);
+}
+function isoWeekMonday(year,week){
+  const jan4=new Date(year,0,4);
+  const jan4dow=(jan4.getDay()+6)%7;
+  const w1mon=new Date(jan4); w1mon.setDate(jan4.getDate()-jan4dow);
+  const t=new Date(w1mon); t.setDate(w1mon.getDate()+(week-1)*7);
+  return t;
+}
+function dataBR(d){ return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"}); }
+
+function popularSelects(){
+  const now=new Date(), anoAtual=now.getFullYear();
+  // meses
+  const sm=$("selMonth"); sm.innerHTML=MESES.map((m,i)=>`<option value="${i+1}">${m}</option>`).join("");
+  sm.value=String(now.getMonth()+1);
+  // semanas
+  const sw=$("selWeek"); let o=""; for(let w=1;w<=53;w++) o+=`<option value="${w}">W${("0"+w).slice(-2)}</option>`;
+  sw.innerHTML=o; sw.value=String(getISOWeek(now));
+  // anos
+  const anos=[anoAtual, anoAtual-1];
+  const opAnos=anos.map(a=>`<option value="${a}">${a}</option>`).join("");
+  $("selMonthYear").innerHTML=opAnos; $("selWeekYear").innerHTML=opAnos;
+}
+
 function trocarPeriodo(p){
   SEL_PERIODO=p;
   ["dia","semana","mes"].forEach(x=>$("p"+x.charAt(0).toUpperCase()+x.slice(1)).classList.toggle("on",x===p));
-  refresh();
+  $("ctlDia").classList.toggle("hidden",p!=="dia");
+  $("ctlSemana").classList.toggle("hidden",p!=="semana");
+  $("ctlMes").classList.toggle("hidden",p!=="mes");
+  atualizarFiltro();
 }
-function trocarData(){
-  const iso=$("dashDate").value;
-  const br=isoParaBR(iso);
-  SEL_DATE = (br===hojeBR() && SEL_PERIODO==="dia")?"":br;
-  $("btnHoje").classList.toggle("on", SEL_DATE==="");
+function atualizarFiltro(){
+  if(SEL_PERIODO==="dia"){
+    const br=isoParaBR($("dashDate").value)||hojeBR();
+    SEL_DATA=br;
+    SEL_LABEL = (br===hojeBR())?"AO VIVO":("DIA · "+br);
+    $("btnHoje").classList.toggle("on", br===hojeBR());
+  }else if(SEL_PERIODO==="semana"){
+    const w=Number($("selWeek").value), y=Number($("selWeekYear").value);
+    SEL_DATA=dataBR(isoWeekMonday(y,w));
+    SEL_LABEL="SEMANA W"+("0"+w).slice(-2)+" · "+y;
+  }else{
+    const mo=Number($("selMonth").value), y=Number($("selMonthYear").value);
+    SEL_DATA=dataBR(new Date(y,mo-1,1));
+    SEL_LABEL=MESES[mo-1]+" · "+y;
+  }
   refresh();
 }
 function voltarHoje(){
-  SEL_DATE="";
   $("dashDate").value=brParaISO(hojeBR());
-  $("btnHoje").classList.add("on");
-  refresh();
+  atualizarFiltro();
 }
+
+/* ---------- MODO TV (slides) ---------- */
+let tvTimer=null;
 function toggleTV(){
-  const b=document.body;
   if(!document.fullscreenElement){
-    (document.documentElement.requestFullscreen?document.documentElement.requestFullscreen():Promise.resolve()).catch(()=>{});
-    b.classList.add("tv");$("btnTV").classList.add("on");
+    (document.documentElement.requestFullscreen?document.documentElement.requestFullscreen():Promise.resolve()).catch(()=>{ startTV(); });
   }else{
     (document.exitFullscreen?document.exitFullscreen():Promise.resolve()).catch(()=>{});
   }
 }
-document.addEventListener("fullscreenchange",()=>{
-  const on=!!document.fullscreenElement;
-  document.body.classList.toggle("tv",on);
-  $("btnTV").classList.toggle("on",on);
-});
+function startTV(){
+  document.body.classList.add("tv");$("btnTV").classList.add("on");
+  document.body.classList.add("sa");document.body.classList.remove("sb");
+  fitTV();
+  clearInterval(tvTimer);
+  tvTimer=setInterval(()=>{ document.body.classList.toggle("sa"); document.body.classList.toggle("sb"); fitTV(); }, 12000);
+}
+function stopTV(){
+  document.body.classList.remove("tv","sa","sb");$("btnTV").classList.remove("on");
+  clearInterval(tvTimer);tvTimer=null;$("grid").style.transform="";
+}
+function fitTV(){
+  const g=$("grid"); g.style.transform="";
+  if(!document.body.classList.contains("tv")) return;
+  requestAnimationFrame(()=>{
+    const top=g.getBoundingClientRect().top;
+    const avail=window.innerHeight-top-30;
+    const h=g.scrollHeight;
+    const s=Math.min(1, avail/h);
+    g.style.transformOrigin="top center";
+    g.style.transform = s<0.999 ? `scale(${s})` : "";
+  });
+}
+document.addEventListener("fullscreenchange",()=>{ if(document.fullscreenElement) startTV(); else stopTV(); });
+window.addEventListener("resize", fitTV);
 
 async function loadLive(){
-  const dataParam = (SEL_DATE || (SEL_PERIODO!=="dia" ? hojeBR() : "")) ;
-  let p = "api=dados&periodo="+SEL_PERIODO;
-  if(dataParam) p += "&data="+encodeURIComponent(dataParam);
-  const d = await jsonp(p);
+  let p="api=dados&periodo="+SEL_PERIODO;
+  if(SEL_DATA) p+="&data="+encodeURIComponent(SEL_DATA);
+  const d=await jsonp(p);
   return { info:d.info||{}, ondas:d.ondas||[], timeline:d.timeline||[], data:d.data, hoje:d.hoje };
 }
 
 let refreshing=false;
 async function refresh(){
-  if(!WEBAPP_URL){ setLive(false); render(DEMO); return; }
+  if(!WEBAPP_URL){ setLive(false); render(DEMO); fitTV(); return; }
   if(refreshing) return;
   refreshing=true;
   try{
-    const d = await loadLive();
-    const rot = SEL_PERIODO==="semana" ? "SEMANA" : SEL_PERIODO==="mes" ? "MÊS" : "";
-    const historico = SEL_DATE && SEL_DATE!==hojeBR();
-    let txt = "AO VIVO";
-    if(rot) txt = rot + (d.data?(" · "+d.data):"");
-    else if(historico) txt = "HISTÓRICO · "+SEL_DATE;
-    setLive(true, txt);
+    const d=await loadLive();
+    setLive(true, SEL_LABEL);
     render(d);
+    fitTV();
   }catch(e){
     console.error("Falha ao ler dados do app web:",e);
     setLive(false,"RECONECTANDO…");
-  }finally{
-    refreshing=false;
-  }
+  }finally{ refreshing=false; }
 }
 function setLive(on,txt){
   const el=$("live");
@@ -555,8 +646,9 @@ setInterval(()=>{$("clock").textContent=new Date().toLocaleTimeString("pt-BR");}
 $("clock").textContent=new Date().toLocaleTimeString("pt-BR");
 $("dashDate").value=brParaISO(hojeBR());
 $("btnHoje").classList.add("on");
-
-refresh();
+popularSelects();
+render(DEMO);
+atualizarFiltro();
 setInterval(refresh, REFRESH_MS);
 </script>
 </body>
