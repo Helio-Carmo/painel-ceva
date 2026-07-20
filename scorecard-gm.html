@@ -188,7 +188,7 @@ a{color:inherit}
 
   <!-- PROGRAMAÇÃO -->
   <section class="panel col-6" style="--accent:var(--info)">
-    <div class="phead"><span class="tag">Programação</span><span class="desc">programado × realizado por prédio</span></div>
+    <div class="phead"><span class="tag">Programação</span><span class="desc">programado × realizado por galpão</span></div>
     <div id="prog"></div>
   </section>
 
@@ -229,7 +229,7 @@ a{color:inherit}
    Ela termina em .../exec. Enquanto vazia, mostra os dados de exemplo.
    O dashboard lê por JSONP (sem CORS) e a planilha continua PRIVADA.
    ============================================================ */
-const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbynsNPsd9wEP0xiZF_riz9i-dQZTmmhoCJbXUaJ_2lgKtfYC8e_AEsPMz1yQufB284ong/exec";        // <-- COLE A URL /exec AQUI
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbynsNPsd9wEP0xiZF_riz9i-dQZTmmhoCJbXUaJ_2lgKtfYC8e_AEsPMz1yQufB284ong/exec";
 const REFRESH_MS = 60000;     // 60s
 
 /* metas de aderência (verde ≥ meta, amarelo ≥ meta-band, senão vermelho) */
@@ -303,23 +303,22 @@ function render(d){
   setStat("q_acid",I.ACIDENTES); setStat("q_inc",I.INCIDENTES);
   $("q_oco").querySelector(".n").textContent=num(I.OCORRÊNCIAS);
 
-  // RH — HC por turno/prédio + absenteísmo (planejado x disponível)
+  // RH — HC por turno/galpão (planejado x disponível)
   $("rh").innerHTML =
-    bar("Turno 1 · Prédio 2", I.HC_DISPONIVEL_T1_P2, I.HC_PLANEJADO_T1_P2) +
-    bar("Turno 1 · Prédio 3", I.HC_DISPONIVEL_T1_P3, I.HC_PLANEJADO_T1_P3) +
-    bar("Turno 2 · Prédio 2", I.HC_DISPONIVEL_T2_P2, I.HC_PLANEJADO_T2_P2) +
-    bar("Turno 2 · Prédio 3", I.HC_DISPONIVEL_T2_P3, I.HC_PLANEJADO_T2_P3);
+    bar("Turno 1 · Galpão 2", I.HC_DISPONIVEL_T1_P2, I.HC_PLANEJADO_T1_P2) +
+    bar("Turno 1 · Galpão 3", I.HC_DISPONIVEL_T1_P3, I.HC_PLANEJADO_T1_P3) +
+    bar("Turno 2 · Galpão 2", I.HC_DISPONIVEL_T2_P2, I.HC_PLANEJADO_T2_P2) +
+    bar("Turno 2 · Galpão 3", I.HC_DISPONIVEL_T2_P3, I.HC_PLANEJADO_T2_P3);
 
   // Equipamentos — veículos disponíveis x programados
   $("equip").innerHTML =
-    bar("Prédio 2 · disponível × prog.", I.VEICULOS_DISPONIVEIS_P2, I.VEICULOS_PROGRAMADOS_P2) +
-    bar("Prédio 3 · disponível × prog.", I.VEICULOS_DISPONIVEIS_P3, I.VEICULOS_PROGRAMADOS_P3);
+    bar("Galpão 2 · disponível × prog.", I.VEICULOS_DISPONIVEIS_P2, I.VEICULOS_PROGRAMADOS_P2) +
+    bar("Galpão 3 · disponível × prog.", I.VEICULOS_DISPONIVEIS_P3, I.VEICULOS_PROGRAMADOS_P3);
 
-  // Programação — volume programado x realizado
+  // Programação — volume programado x realizado por galpão
   $("prog").innerHTML =
-    bar("Volume · Prédio 2", I.VOLUME_REALIZADO_P2, I.VOLUME_PROGRAMADO_P2) +
-    bar("Volume · Prédio 3", I.VOLUME_REALIZADO_P3, I.VOLUME_PROGRAMADO_P3) +
-    bar("Veículos programados · P2", I.VEICULOS_PROGRAMADOS_P2, I.VEICULOS_PROGRAMADOS_P2, {showPct:false}) ;
+    bar("Volume · Galpão 2", I.VOLUME_REALIZADO_P2, I.VOLUME_PROGRAMADO_P2) +
+    bar("Volume · Galpão 3", I.VOLUME_REALIZADO_P3, I.VOLUME_PROGRAMADO_P3);
 
   // Performance — CTE x bipado
   const cte=num(I.QTDE_VOLUME_CTE), lido=num(I.QTDE_VOLUME_LIDO);
@@ -330,8 +329,8 @@ function render(d){
 
   // Ops chips
   $("ops").innerHTML = [
-    ["Docas P2",I.DOCAS_EM_USO_P2,"var(--info)"],
-    ["Docas P3",I.DOCAS_EM_USO_P3,"var(--info)"],
+    ["Docas Galpão 2",I.DOCAS_EM_USO_P2,"var(--info)"],
+    ["Docas Galpão 3",I.DOCAS_EM_USO_P3,"var(--info)"],
     ["Veíc. vazios",I.VEICULOS_VAZIOS,"var(--muted)"],
     ["Liberados",I.VEICULOS_LIBERADOS,"var(--good)"],
     ["Em andamento",I.VEICULOS_EM_ANDAMENTO,"var(--amber)"],
@@ -399,11 +398,16 @@ function jsonp(params){
   return new Promise((resolve,reject)=>{
     const cb = "__cb"+Math.random().toString(36).slice(2);
     const s = document.createElement("script");
-    let done=false;
-    window[cb]=d=>{done=true;cleanup();resolve(d);};
-    s.onerror=()=>{cleanup();reject(new Error("falha de rede"));};
-    function cleanup(){try{delete window[cb];}catch(e){}s.remove();}
-    setTimeout(()=>{if(!done){cleanup();reject(new Error("timeout"));}},15000);
+    let settled=false;
+    function finish(fn,arg){
+      if(settled) return; settled=true;
+      window[cb]=function(){};          // vira no-op: resposta atrasada não quebra
+      setTimeout(()=>{ try{delete window[cb];}catch(e){} }, 60000);
+      s.remove(); fn(arg);
+    }
+    window[cb]=d=>finish(resolve,d);
+    s.onerror=()=>finish(reject,new Error("falha de rede"));
+    setTimeout(()=>finish(reject,new Error("timeout")),30000);
     s.src = WEBAPP_URL + (WEBAPP_URL.indexOf("?")>=0?"&":"?") + params + "&callback=" + cb + "&_=" + Date.now();
     document.body.appendChild(s);
   });
@@ -434,8 +438,11 @@ async function loadLive(){
   return { info:d.info||{}, ondas:d.ondas||[], timeline:d.timeline||[], data:d.data, hoje:d.hoje };
 }
 
+let refreshing=false;
 async function refresh(){
   if(!WEBAPP_URL){ setLive(false); render(DEMO); return; }
+  if(refreshing) return;               // fila de 1: evita empilhar requisições
+  refreshing=true;
   try{
     const d = await loadLive();
     const historico = SEL_DATE && SEL_DATE!==hojeBR();
@@ -443,7 +450,9 @@ async function refresh(){
     render(d);
   }catch(e){
     console.error("Falha ao ler dados do app web:",e);
-    setLive(false,"ERRO");
+    setLive(false,"RECONECTANDO…");     // mantém o último render na tela
+  }finally{
+    refreshing=false;
   }
 }
 function setLive(on,txt){
