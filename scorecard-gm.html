@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scorecard · Operação GM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d1219; --panel:#151d29; --panel2:#1c2735; --line:#263344; --line2:#31435a;
+  --ink:#eaf0f8; --muted:#8695ab; --faint:#5a6a80;
+  --amber:#f5b301; --good:#2fd39a; --warn:#ffb020; --bad:#ff5470; --info:#4c9aff;
+  --track:#20293710;
+  --sans:'Inter',system-ui,sans-serif;
+  --cond:'Barlow Condensed',sans-serif;
+  --mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+body{padding:18px 22px 40px;max-width:1500px;margin:0 auto}
+a{color:inherit}
+
+/* ---------- top bar ---------- */
+.topbar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:20px}
+.brand{display:flex;align-items:baseline;gap:12px}
+.brand .mark{font-family:var(--cond);font-weight:700;font-size:30px;letter-spacing:.5px;
+  color:var(--ink);line-height:1}
+.brand .mark b{color:var(--amber)}
+.brand .sub{font-family:var(--cond);font-weight:500;font-size:14px;letter-spacing:2px;
+  text-transform:uppercase;color:var(--faint)}
+.spacer{flex:1}
+.clock{font-family:var(--mono);font-weight:600;font-size:22px;color:var(--ink);
+  letter-spacing:1px}
+.stamp{font-size:11px;color:var(--muted);text-align:right;margin-top:2px;letter-spacing:.3px}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;
+  letter-spacing:1px;text-transform:uppercase;color:var(--good)}
+.live .dot{width:7px;height:7px;border-radius:50%;background:var(--good);
+  box-shadow:0 0 0 0 var(--good);animation:pulse 2s infinite}
+.live.demo{color:var(--warn)} .live.demo .dot{background:var(--warn);animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,211,154,.5)}70%{box-shadow:0 0 0 7px rgba(47,211,154,0)}100%{box-shadow:0 0 0 0 rgba(47,211,154,0)}}
+
+/* ---------- grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:16px 16px 18px;position:relative;overflow:hidden}
+.panel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent,var(--line2))}
+.col-3{grid-column:span 3} .col-4{grid-column:span 4} .col-5{grid-column:span 5}
+.col-6{grid-column:span 6} .col-7{grid-column:span 7} .col-8{grid-column:span 8}
+.col-12{grid-column:span 12}
+@media(max-width:1080px){.grid{grid-template-columns:repeat(6,1fr)}
+  .col-3,.col-4,.col-5,.col-6{grid-column:span 3}.col-7,.col-8,.col-12{grid-column:span 6}}
+@media(max-width:640px){.grid{grid-template-columns:repeat(2,1fr)}
+  [class^=col-]{grid-column:span 2}}
+
+.phead{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.phead .tag{font-family:var(--cond);font-weight:700;font-size:13px;letter-spacing:2px;
+  text-transform:uppercase;color:var(--accent,var(--muted))}
+.phead .desc{font-size:11px;color:var(--faint);letter-spacing:.2px}
+
+/* ---------- QHSE cards ---------- */
+.stat-row{display:flex;gap:12px;justify-content:center}
+.stat{flex:1 1 0;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+  padding:12px 8px;text-align:center;overflow:hidden}
+.stat .n{font-family:var(--mono);font-weight:600;font-size:clamp(24px,4.5vw,34px);line-height:1;color:var(--ink)}
+.stat .l{font-family:var(--cond);font-weight:600;font-size:11px;letter-spacing:1px;
+  text-transform:uppercase;color:var(--muted);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat.zero .n{color:var(--good)} .stat.hot .n{color:var(--bad)}
+
+/* ---------- comparison bars ---------- */
+.cmp{margin:11px 0}
+.cmp-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.cmp-lbl{font-size:12px;color:var(--muted);font-weight:500;letter-spacing:.2px}
+.cmp-val{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink)}
+.cmp-val .m{color:var(--faint)}
+.cmp-track{height:9px;background:#0f1620;border-radius:6px;overflow:hidden;position:relative}
+.cmp-fill{height:100%;border-radius:6px;background:var(--info);transition:width .6s ease;
+  min-width:2px}
+.cmp-pct{font-family:var(--mono);font-size:11px;font-weight:600;margin-left:8px}
+.cmp-goal{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);opacity:.35}
+
+/* ---------- big KPI (expedido x bipado) ---------- */
+.kpi-duo{display:flex;gap:14px;align-items:stretch}
+.kpi{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px}
+.kpi .k-l{font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:1.5px;
+  text-transform:uppercase;color:var(--muted)}
+.kpi .k-n{font-family:var(--mono);font-weight:600;font-size:32px;color:var(--ink);margin-top:4px;line-height:1}
+.kpi .k-sub{font-size:11px;color:var(--faint);margin-top:4px}
+.gauge{display:flex;flex-direction:column;justify-content:center;align-items:center;
+  min-width:120px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px}
+.gauge .g-pct{font-family:var(--mono);font-weight:600;font-size:30px}
+.gauge .g-l{font-family:var(--cond);font-weight:600;font-size:11px;letter-spacing:1.5px;
+  text-transform:uppercase;color:var(--muted);margin-top:2px}
+
+/* ---------- flow / operacao chips ---------- */
+.chips{display:flex;gap:10px;flex-wrap:wrap}
+.chip{flex:1;min-width:88px;background:var(--panel2);border:1px solid var(--line);
+  border-radius:10px;padding:11px 8px;text-align:center}
+.chip .c-n{font-family:var(--mono);font-weight:600;font-size:26px;line-height:1}
+.chip .c-l{font-size:10.5px;color:var(--muted);margin-top:6px;letter-spacing:.4px;
+  text-transform:uppercase;font-weight:600}
+
+/* ---------- ondas board ---------- */
+.wave{display:grid;grid-template-columns:96px repeat(4,1fr);gap:0;align-items:center;
+  border-top:1px solid var(--line);padding:9px 0;font-size:12px}
+.wave.head{border-top:none;padding-bottom:8px}
+.wave.head span{font-family:var(--cond);font-weight:600;font-size:11px;letter-spacing:1px;
+  text-transform:uppercase;color:var(--faint)}
+.wave-name{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--ink)}
+.wave-dot{width:11px;height:11px;border-radius:3px;flex:none}
+.wave .t{font-family:var(--mono);font-weight:500;color:var(--muted)}
+.wave .t.ok{color:var(--good)} .wave .t.no{color:var(--faint)}
+
+/* ---------- timeline rail ---------- */
+.tl-veh{border-top:1px solid var(--line);padding:14px 4px 6px}
+.tl-veh:first-child{border-top:none}
+.tl-plate{display:inline-block;font-family:var(--mono);font-weight:600;font-size:13px;
+  letter-spacing:1px;background:#0f1620;border:1px solid var(--line2);border-radius:6px;
+  padding:3px 9px;color:var(--amber);margin-bottom:12px}
+.rail{display:grid;grid-template-columns:repeat(4,1fr);position:relative;margin:0 6px}
+.rail::before{content:"";position:absolute;left:6%;right:6%;top:9px;height:2px;background:var(--line2)}
+.station{text-align:center;position:relative;z-index:1}
+.station .node{width:18px;height:18px;border-radius:50%;background:var(--panel);
+  border:2px solid var(--line2);margin:0 auto 8px}
+.station.done .node{background:var(--good);border-color:var(--good)}
+.station.now .node{background:var(--amber);border-color:var(--amber);
+  box-shadow:0 0 0 4px rgba(245,179,1,.18)}
+.station .s-t{font-family:var(--mono);font-weight:600;font-size:12px;color:var(--ink)}
+.station .s-t.pend{color:var(--faint)}
+.station .s-l{font-size:10px;color:var(--muted);margin-top:3px;line-height:1.25;
+  text-transform:uppercase;letter-spacing:.3px;font-weight:600}
+
+.foot{margin-top:22px;text-align:center;font-size:11px;color:var(--faint);letter-spacing:.3px}
+.empty{font-size:12px;color:var(--faint);padding:14px 0;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="mark">SCORECARD <b>GM</b></span>
+    <span class="sub">Torre de Controle · Expedição</span>
+  </div>
+  <div class="spacer"></div>
+  <div>
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="stamp"><span class="live" id="live"><span class="dot"></span><span id="liveTxt">AO VIVO</span></span> · <span id="stamp">atualizado --:--</span></div>
+  </div>
+</div>
+
+<div class="grid" id="grid">
+  <!-- QHSE -->
+  <section class="panel col-3" style="--accent:var(--bad)">
+    <div class="phead"><span class="tag">QHSE</span><span class="desc">segurança</span></div>
+    <div class="stat-row">
+      <div class="stat" id="q_acid"><div class="n">–</div><div class="l">Acidentes</div></div>
+      <div class="stat" id="q_inc"><div class="n">–</div><div class="l">Incidentes</div></div>
+      <div class="stat" id="q_oco"><div class="n">–</div><div class="l">Ocorrências</div></div>
+    </div>
+  </section>
+
+  <!-- RH -->
+  <section class="panel col-5" style="--accent:var(--info)">
+    <div class="phead"><span class="tag">RH</span><span class="desc">HC planejado × disponível · absenteísmo</span></div>
+    <div id="rh"></div>
+  </section>
+
+  <!-- EQUIPAMENTOS -->
+  <section class="panel col-4" style="--accent:var(--amber)">
+    <div class="phead"><span class="tag">Equipamentos</span><span class="desc">veículos em piso × programado</span></div>
+    <div id="equip"></div>
+  </section>
+
+  <!-- PROGRAMAÇÃO -->
+  <section class="panel col-6" style="--accent:var(--info)">
+    <div class="phead"><span class="tag">Programação</span><span class="desc">programado × realizado por prédio</span></div>
+    <div id="prog"></div>
+  </section>
+
+  <!-- PERFORMANCE: expedido x bipado -->
+  <section class="panel col-6" style="--accent:var(--good)">
+    <div class="phead"><span class="tag">Performance</span><span class="desc">total expedido (CTE) × bipado</span></div>
+    <div class="kpi-duo">
+      <div class="kpi"><div class="k-l">Volume CTE</div><div class="k-n" id="cte">–</div><div class="k-sub">emitido · GM Sorocaba</div></div>
+      <div class="kpi"><div class="k-l">Volume bipado</div><div class="k-n" id="lido">–</div><div class="k-sub">lido na operação</div></div>
+      <div class="gauge"><div class="g-pct" id="bipPct">–</div><div class="g-l">Aderência</div></div>
+    </div>
+  </section>
+
+  <!-- OPERACAO chips -->
+  <section class="panel col-12" style="--accent:var(--amber)">
+    <div class="phead"><span class="tag">Hora a hora</span><span class="desc">docas · veículos vazios · liberados · em andamento</span></div>
+    <div class="chips" id="ops"></div>
+  </section>
+
+  <!-- ONDAS -->
+  <section class="panel col-6" style="--accent:var(--amber)">
+    <div class="phead"><span class="tag">Ondas</span><span class="desc">controle carreg. · NF GM · CTE · expedição</span></div>
+    <div id="ondas"></div>
+  </section>
+
+  <!-- TIME LINE -->
+  <section class="panel col-6" style="--accent:var(--good)">
+    <div class="phead"><span class="tag">Time line</span><span class="desc">jornada do veículo · chegada → liberação</span></div>
+    <div id="timeline"></div>
+  </section>
+</div>
+
+<div class="foot">Scorecard Operação GM · dados via Google Sheets · atualização automática a cada 60s</div>
+
+<script>
+/* ============================================================
+   CONFIG — cole a URL /exec do app web (implantação do Apps Script).
+   Ela termina em .../exec. Enquanto vazia, mostra os dados de exemplo.
+   O dashboard lê por JSONP (sem CORS) e a planilha continua PRIVADA.
+   ============================================================ */
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbynsNPsd9wEP0xiZF_riz9i-dQZTmmhoCJbXUaJ_2lgKtfYC8e_AEsPMz1yQufB284ong/exec";        // <-- COLE A URL /exec AQUI
+const REFRESH_MS = 60000;     // 60s
+
+/* metas de aderência (verde ≥ meta, amarelo ≥ meta-band, senão vermelho) */
+const META = 0.95, BAND = 0.10;
+
+/* cores das ondas por nome */
+const WAVE_COLORS = {AMARELA:"#f5b301",AZUL:"#4c9aff",VERDE:"#2fd39a",VERMELHA:"#ff5470",
+  ROSA:"#ff8ac0",ROXA:"#a970ff",CINZA:"#8695ab",PRETA:"#5a6a80",ATACADISTA:"#39d3c6",
+  BRANCA:"#eaf0f8",LARANJA:"#ff8a3d"};
+
+/* ---------- dados de exemplo (do modelo) p/ preview sem planilha ---------- */
+const DEMO = {
+  info:{ ACIDENTES:0,INCIDENTES:1,OCORRÊNCIAS:2,
+    HC_PLANEJADO_T1_P2:12,HC_DISPONIVEL_T1_P2:10,HC_PLANEJADO_T1_P3:5,HC_DISPONIVEL_T1_P3:5,
+    HC_PLANEJADO_T2_P2:10,HC_DISPONIVEL_T2_P2:8,HC_PLANEJADO_T2_P3:4,HC_DISPONIVEL_T2_P3:4,
+    VEICULOS_PROGRAMADOS_P2:6,VEICULOS_PROGRAMADOS_P3:4,VEICULOS_DISPONIVEIS_P2:10,VEICULOS_DISPONIVEIS_P3:3,
+    VOLUME_PROGRAMADO_P2:1000,VOLUME_REALIZADO_P2:700,VOLUME_PROGRAMADO_P3:900,VOLUME_REALIZADO_P3:1030,
+    QTDE_VOLUME_CTE:8480,QTDE_VOLUME_LIDO:7912,
+    DOCAS_EM_USO_P2:5,DOCAS_EM_USO_P3:3,VEICULOS_VAZIOS:2,VEICULOS_LIBERADOS:9,VEICULOS_EM_ANDAMENTO:4 },
+  ondas:[
+    {ONDA:"AMARELA",CICLO:1,HORA_CONTROLE_CARREGAMENTO:"06:20",HORA_NF_GM:"07:05",EMISSÃO_CTE:"07:40",HORA_VEICULO_EXPEDIDO:"08:15"},
+    {ONDA:"VERMELHA",CICLO:1,HORA_CONTROLE_CARREGAMENTO:"12:10",HORA_NF_GM:"12:45",EMISSÃO_CTE:"13:10",HORA_VEICULO_EXPEDIDO:""},
+    {ONDA:"VERMELHA",CICLO:2,HORA_CONTROLE_CARREGAMENTO:"15:30",HORA_NF_GM:"",EMISSÃO_CTE:"",HORA_VEICULO_EXPEDIDO:""},
+    {ONDA:"AZUL",CICLO:1,HORA_CONTROLE_CARREGAMENTO:"07:19",HORA_NF_GM:"08:00",EMISSÃO_CTE:"",HORA_VEICULO_EXPEDIDO:""},
+    {ONDA:"VERDE",CICLO:1,HORA_CONTROLE_CARREGAMENTO:"14:05",HORA_NF_GM:"",EMISSÃO_CTE:"",HORA_VEICULO_EXPEDIDO:""},
+    {ONDA:"CINZA",CICLO:1,HORA_CONTROLE_CARREGAMENTO:"",HORA_NF_GM:"",EMISSÃO_CTE:"",HORA_VEICULO_EXPEDIDO:""},
+    {ONDA:"ATACADISTA",CICLO:1,HORA_CONTROLE_CARREGAMENTO:"",HORA_NF_GM:"",EMISSÃO_CTE:"",HORA_VEICULO_EXPEDIDO:""},
+  ],
+  timeline:[
+    {PLACA_VEICULO:"ABC1234",HORA_CHEGADA_VEICULO_GM:"06:21",HORA_VEICULO_DOCA_CARREGAMENTO:"08:21",HORA_LIBERACAO_NF_GM:"10:21",HORA_LIBERAÇÃO_VEICULO:"12:21"},
+    {PLACA_VEICULO:"DEF5678",HORA_CHEGADA_VEICULO_GM:"07:45",HORA_VEICULO_DOCA_CARREGAMENTO:"09:30",HORA_LIBERACAO_NF_GM:"",HORA_LIBERAÇÃO_VEICULO:""},
+  ]
+};
+
+/* ============================================================
+   helpers
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const num = v => (v===null||v===undefined||v==="")?0:(typeof v==="number"?v:parseFloat(String(v).replace(",",".")))||0;
+const fmt = n => num(n).toLocaleString("pt-BR");
+const stateColor = p => p>=META?"var(--good)":p>=(META-BAND)?"var(--warn)":"var(--bad)";
+
+function bar(label, real, meta, opts={}){
+  const r=num(real), m=num(meta);
+  const pct = m>0 ? r/m : (r>0?1:0);
+  const width = Math.min(pct,1.15)*100;
+  const invert = opts.invert;               // p/ absenteísmo: menor é melhor
+  const good = invert ? (pct<=1.05) : (pct>=META);
+  const col = invert ? (pct<=1?"var(--good)":pct<=1.2?"var(--warn)":"var(--bad)") : stateColor(pct);
+  const pctTxt = opts.showPct===false ? "" :
+    `<span class="cmp-pct" style="color:${col}">${Math.round(pct*100)}%</span>`;
+  return `<div class="cmp">
+     <div class="cmp-top">
+       <span class="cmp-lbl">${label}</span>
+       <span class="cmp-val">${fmt(r)} <span class="m">/ ${fmt(m)}</span>${pctTxt}</span>
+     </div>
+     <div class="cmp-track"><div class="cmp-fill" style="width:${width}%;background:${col}"></div>
+       <div class="cmp-goal" style="left:${Math.min(100,100*(m>0?m/Math.max(r,m):1))}%"></div></div>
+   </div>`;
+}
+
+/* ============================================================
+   render
+   ============================================================ */
+function render(d){
+  const I = d.info;
+
+  // QHSE
+  const setStat=(el,v)=>{const n=num(v);$(el).querySelector(".n").textContent=n;
+    $(el).classList.toggle("zero",n===0);$(el).classList.toggle("hot",n>0&&el!=="q_oco");};
+  setStat("q_acid",I.ACIDENTES); setStat("q_inc",I.INCIDENTES);
+  $("q_oco").querySelector(".n").textContent=num(I.OCORRÊNCIAS);
+
+  // RH — HC por turno/prédio + absenteísmo (planejado x disponível)
+  $("rh").innerHTML =
+    bar("Turno 1 · Prédio 2", I.HC_DISPONIVEL_T1_P2, I.HC_PLANEJADO_T1_P2) +
+    bar("Turno 1 · Prédio 3", I.HC_DISPONIVEL_T1_P3, I.HC_PLANEJADO_T1_P3) +
+    bar("Turno 2 · Prédio 2", I.HC_DISPONIVEL_T2_P2, I.HC_PLANEJADO_T2_P2) +
+    bar("Turno 2 · Prédio 3", I.HC_DISPONIVEL_T2_P3, I.HC_PLANEJADO_T2_P3);
+
+  // Equipamentos — veículos disponíveis x programados
+  $("equip").innerHTML =
+    bar("Prédio 2 · disponível × prog.", I.VEICULOS_DISPONIVEIS_P2, I.VEICULOS_PROGRAMADOS_P2) +
+    bar("Prédio 3 · disponível × prog.", I.VEICULOS_DISPONIVEIS_P3, I.VEICULOS_PROGRAMADOS_P3);
+
+  // Programação — volume programado x realizado
+  $("prog").innerHTML =
+    bar("Volume · Prédio 2", I.VOLUME_REALIZADO_P2, I.VOLUME_PROGRAMADO_P2) +
+    bar("Volume · Prédio 3", I.VOLUME_REALIZADO_P3, I.VOLUME_PROGRAMADO_P3) +
+    bar("Veículos programados · P2", I.VEICULOS_PROGRAMADOS_P2, I.VEICULOS_PROGRAMADOS_P2, {showPct:false}) ;
+
+  // Performance — CTE x bipado
+  const cte=num(I.QTDE_VOLUME_CTE), lido=num(I.QTDE_VOLUME_LIDO);
+  $("cte").textContent=fmt(cte); $("lido").textContent=fmt(lido);
+  const p = cte>0? lido/cte : 0;
+  $("bipPct").textContent = Math.round(p*100)+"%";
+  $("bipPct").style.color = stateColor(p);
+
+  // Ops chips
+  $("ops").innerHTML = [
+    ["Docas P2",I.DOCAS_EM_USO_P2,"var(--info)"],
+    ["Docas P3",I.DOCAS_EM_USO_P3,"var(--info)"],
+    ["Veíc. vazios",I.VEICULOS_VAZIOS,"var(--muted)"],
+    ["Liberados",I.VEICULOS_LIBERADOS,"var(--good)"],
+    ["Em andamento",I.VEICULOS_EM_ANDAMENTO,"var(--amber)"],
+  ].map(([l,v,c])=>`<div class="chip"><div class="c-n" style="color:${c}">${fmt(v)}</div><div class="c-l">${l}</div></div>`).join("");
+
+  // Ondas
+  renderOndas(d.ondas);
+  // Timeline
+  renderTimeline(d.timeline);
+
+  $("stamp").textContent="atualizado "+new Date().toLocaleTimeString("pt-BR");
+}
+
+function renderOndas(rows){
+  if(!rows||!rows.length){$("ondas").innerHTML='<div class="empty">Sem ondas lançadas ainda.</div>';return;}
+  const ord=[...rows].sort((a,b)=>{
+    const A=(a.ONDA||"").toString(), B=(b.ONDA||"").toString();
+    return A===B ? (num(a.CICLO)-num(b.CICLO)) : A.localeCompare(B);
+  });
+  let h=`<div class="wave head"><span>Onda</span><span>Controle</span><span>NF GM</span><span>CTE</span><span>Expedição</span></div>`;
+  ord.forEach(r=>{
+    const nm=(r.ONDA||"—").toString().toUpperCase();
+    const col=WAVE_COLORS[nm]||"var(--faint)";
+    const cic=num(r.CICLO);
+    const badge=cic>1?` <span style="color:var(--faint);font-size:10px">·${cic}</span>`:"";
+    const cell=v=>v?`<span class="t ok">${v}</span>`:`<span class="t no">—</span>`;
+    h+=`<div class="wave">
+      <span class="wave-name"><span class="wave-dot" style="background:${col}"></span>${nm}${badge}</span>
+      ${cell(r.HORA_CONTROLE_CARREGAMENTO)}${cell(r.HORA_NF_GM)}${cell(r["EMISSÃO_CTE"]||r.EMISSAO_CTE)}${cell(r.HORA_VEICULO_EXPEDIDO)}
+    </div>`;
+  });
+  $("ondas").innerHTML=h;
+}
+
+function renderTimeline(rows){
+  if(!rows||!rows.length){$("timeline").innerHTML='<div class="empty">Sem veículos na jornada ainda.</div>';return;}
+  const stations=[
+    ["Chegada GM","HORA_CHEGADA_VEICULO_GM"],
+    ["Doca / carreg.","HORA_VEICULO_DOCA_CARREGAMENTO"],
+    ["Liberação NF","HORA_LIBERACAO_NF_GM"],
+    ["Liberação veíc.","HORA_LIBERAÇÃO_VEICULO"],
+  ];
+  let h="";
+  rows.slice(0,6).forEach(r=>{
+    // encontra último passo preenchido = "now"
+    const filled = stations.map(([,k])=> !!(r[k]&&String(r[k]).trim()) );
+    const lastDone = filled.lastIndexOf(true);
+    let cells="";
+    stations.forEach(([lbl,k],i)=>{
+      const v=r[k]?String(r[k]).trim():"";
+      const cls = v? (i===lastDone?"now":"done") : "";
+      cells+=`<div class="station ${cls}"><div class="node"></div>
+        <div class="s-t ${v?'':'pend'}">${v||"—"}</div><div class="s-l">${lbl}</div></div>`;
+    });
+    h+=`<div class="tl-veh"><span class="tl-plate">${r.PLACA_VEICULO||"—"}</span>
+      <div class="rail">${cells}</div></div>`;
+  });
+  $("timeline").innerHTML=h;
+}
+
+/* ============================================================
+   Dados via JSONP contra o app web (doGet?api=dados) — sem CORS.
+   ============================================================ */
+function jsonp(params){
+  return new Promise((resolve,reject)=>{
+    const cb = "__cb"+Math.random().toString(36).slice(2);
+    const s = document.createElement("script");
+    let done=false;
+    window[cb]=d=>{done=true;cleanup();resolve(d);};
+    s.onerror=()=>{cleanup();reject(new Error("falha de rede"));};
+    function cleanup(){try{delete window[cb];}catch(e){}s.remove();}
+    setTimeout(()=>{if(!done){cleanup();reject(new Error("timeout"));}},15000);
+    s.src = WEBAPP_URL + (WEBAPP_URL.indexOf("?")>=0?"&":"?") + params + "&callback=" + cb;
+    document.body.appendChild(s);
+  });
+}
+async function loadLive(){
+  const d = await jsonp("api=dados");        // já vem filtrado para o dia atual pelo servidor
+  return { info:d.info||{}, ondas:d.ondas||[], timeline:d.timeline||[] };
+}
+
+async function refresh(){
+  if(!WEBAPP_URL){
+    setLive(false);
+    render(DEMO);
+    return;
+  }
+  try{
+    const d = await loadLive();
+    setLive(true);
+    render(d);
+  }catch(e){
+    console.error("Falha ao ler dados do app web:",e);
+    setLive(false,"ERRO");
+  }
+}
+function setLive(on,txt){
+  const el=$("live");
+  el.classList.toggle("demo",!on);
+  $("liveTxt").textContent = txt || (on?"AO VIVO":"MODO EXEMPLO");
+}
+
+/* clock */
+setInterval(()=>{$("clock").textContent=new Date().toLocaleTimeString("pt-BR");},1000);
+$("clock").textContent=new Date().toLocaleTimeString("pt-BR");
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>
