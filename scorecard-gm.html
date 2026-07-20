@@ -11,7 +11,7 @@
 <style>
 :root{
   --bg:#0d1219; --panel:#151d29; --panel2:#1c2735; --line:#263344; --line2:#31435a;
-  --ink:#eaf0f8; --muted:#8695ab; --faint:#5a6a80;
+  --ink:#eef3fa; --muted:#b3bece; --faint:#8b98ab;
   --amber:#f5b301; --good:#2fd39a; --warn:#ffb020; --bad:#ff5470; --info:#4c9aff;
   --track:#20293710;
   --sans:'Inter',system-ui,sans-serif;
@@ -48,6 +48,42 @@ a{color:inherit}
 .datepick button{background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--ink);
   font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:1px;text-transform:uppercase;padding:7px 12px;cursor:pointer}
 .datepick button.on{background:var(--amber);color:#0d1219;border-color:var(--amber)}
+
+/* período (dia/semana/mês) */
+.period{display:flex;gap:4px}
+.period button{background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--muted);
+  font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:1px;text-transform:uppercase;padding:7px 12px;cursor:pointer}
+.period button.on{background:var(--info);color:#04203f;border-color:var(--info)}
+
+/* absenteísmo no RH */
+.abs-row{display:flex;gap:10px;margin-bottom:14px}
+.abs{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 8px;text-align:center}
+.abs-n{font-family:var(--mono);font-weight:600;font-size:26px;line-height:1}
+.abs-l{font-family:var(--cond);font-weight:600;font-size:11.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-top:5px}
+
+/* pátio (equipamentos) */
+.patio{display:flex;gap:10px;flex-wrap:wrap}
+.pnum{flex:1;min-width:110px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 10px;text-align:center}
+.pnum .pn{font-family:var(--mono);font-weight:600;font-size:28px;line-height:1}
+.pnum .pl{font-size:11.5px;color:var(--muted);margin-top:6px;text-transform:uppercase;font-weight:600;letter-spacing:.3px}
+
+/* modo TV: tudo maior e sem distração */
+body.tv{max-width:none;padding:22px 30px}
+body.tv .foot{display:none}
+body.tv .brand .mark{font-size:38px}
+body.tv .clock{font-size:28px}
+body.tv .cmp-lbl{font-size:16px}
+body.tv .cmp-val{font-size:17px}
+body.tv .cmp-track{height:12px}
+body.tv .phead .tag{font-size:16px}
+body.tv .phead .desc{font-size:14px}
+body.tv .stat .n{font-size:clamp(34px,4.5vw,52px)}
+body.tv .kpi .k-n{font-size:52px}
+body.tv .gauge .g-pct{font-size:46px}
+body.tv .chip .c-n{font-size:40px}
+body.tv .abs-n{font-size:34px}
+body.tv .pnum .pn{font-size:36px}
+body.tv .grid{gap:18px}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,211,154,.5)}70%{box-shadow:0 0 0 7px rgba(47,211,154,0)}100%{box-shadow:0 0 0 0 rgba(47,211,154,0)}}
 
 /* ---------- grid ---------- */
@@ -66,27 +102,27 @@ a{color:inherit}
 .phead{display:flex;align-items:center;gap:8px;margin-bottom:14px}
 .phead .tag{font-family:var(--cond);font-weight:700;font-size:13px;letter-spacing:2px;
   text-transform:uppercase;color:var(--accent,var(--muted))}
-.phead .desc{font-size:11px;color:var(--faint);letter-spacing:.2px}
+.phead .desc{font-size:12.5px;color:var(--muted);letter-spacing:.2px}
 
 /* ---------- QHSE cards ---------- */
 .stat-row{display:flex;gap:12px;justify-content:center}
 .stat{flex:1 1 0;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:10px;
   padding:12px 8px;text-align:center;overflow:hidden}
-.stat .n{font-family:var(--mono);font-weight:600;font-size:clamp(24px,4.5vw,34px);line-height:1;color:var(--ink)}
-.stat .l{font-family:var(--cond);font-weight:600;font-size:11px;letter-spacing:1px;
+.stat .n{font-family:var(--mono);font-weight:600;font-size:clamp(28px,4.5vw,40px);line-height:1;color:var(--ink)}
+.stat .l{font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:1px;
   text-transform:uppercase;color:var(--muted);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stat.zero .n{color:var(--good)} .stat.hot .n{color:var(--bad)}
 
 /* ---------- comparison bars ---------- */
 .cmp{margin:11px 0}
 .cmp-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
-.cmp-lbl{font-size:12px;color:var(--muted);font-weight:500;letter-spacing:.2px}
-.cmp-val{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink)}
-.cmp-val .m{color:var(--faint)}
+.cmp-lbl{font-size:13.5px;color:var(--ink);font-weight:500;letter-spacing:.2px}
+.cmp-val{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--ink)}
+.cmp-val .m{color:var(--muted)}
 .cmp-track{height:9px;background:#0f1620;border-radius:6px;overflow:hidden;position:relative}
 .cmp-fill{height:100%;border-radius:6px;background:var(--info);transition:width .6s ease;
   min-width:2px}
-.cmp-pct{font-family:var(--mono);font-size:11px;font-weight:600;margin-left:8px}
+.cmp-pct{font-family:var(--mono);font-size:13px;font-weight:600;margin-left:8px}
 .cmp-goal{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);opacity:.35}
 
 /* ---------- big KPI (expedido x bipado) ---------- */
@@ -94,11 +130,11 @@ a{color:inherit}
 .kpi{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px}
 .kpi .k-l{font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:1.5px;
   text-transform:uppercase;color:var(--muted)}
-.kpi .k-n{font-family:var(--mono);font-weight:600;font-size:32px;color:var(--ink);margin-top:4px;line-height:1}
+.kpi .k-n{font-family:var(--mono);font-weight:600;font-size:42px;color:var(--ink);margin-top:4px;line-height:1}
 .kpi .k-sub{font-size:11px;color:var(--faint);margin-top:4px}
 .gauge{display:flex;flex-direction:column;justify-content:center;align-items:center;
   min-width:120px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px}
-.gauge .g-pct{font-family:var(--mono);font-weight:600;font-size:30px}
+.gauge .g-pct{font-family:var(--mono);font-weight:600;font-size:38px}
 .gauge .g-l{font-family:var(--cond);font-weight:600;font-size:11px;letter-spacing:1.5px;
   text-transform:uppercase;color:var(--muted);margin-top:2px}
 
@@ -106,8 +142,8 @@ a{color:inherit}
 .chips{display:flex;gap:10px;flex-wrap:wrap}
 .chip{flex:1;min-width:88px;background:var(--panel2);border:1px solid var(--line);
   border-radius:10px;padding:11px 8px;text-align:center}
-.chip .c-n{font-family:var(--mono);font-weight:600;font-size:26px;line-height:1}
-.chip .c-l{font-size:10.5px;color:var(--muted);margin-top:6px;letter-spacing:.4px;
+.chip .c-n{font-family:var(--mono);font-weight:600;font-size:32px;line-height:1}
+.chip .c-l{font-size:11.5px;color:var(--muted);margin-top:6px;letter-spacing:.4px;
   text-transform:uppercase;font-weight:600}
 
 /* ---------- ondas board ---------- */
@@ -152,10 +188,16 @@ a{color:inherit}
     <span class="sub">Torre de Controle · Expedição</span>
   </div>
   <div class="spacer"></div>
+  <div class="period">
+    <button id="pDia" class="on" onclick="trocarPeriodo('dia')">Dia</button>
+    <button id="pSemana" onclick="trocarPeriodo('semana')">Semana</button>
+    <button id="pMes" onclick="trocarPeriodo('mes')">Mês</button>
+  </div>
   <div class="datepick">
     <label>Data</label>
     <input type="date" id="dashDate" onchange="trocarData()">
     <button id="btnHoje" onclick="voltarHoje()">Hoje</button>
+    <button id="btnTV" onclick="toggleTV()" title="Tela cheia">TV</button>
   </div>
   <div>
     <div class="clock" id="clock">--:--:--</div>
@@ -177,18 +219,19 @@ a{color:inherit}
   <!-- RH -->
   <section class="panel col-5" style="--accent:var(--info)">
     <div class="phead"><span class="tag">RH</span><span class="desc">HC planejado × disponível · absenteísmo</span></div>
+    <div class="abs-row" id="rhAbs"></div>
     <div id="rh"></div>
   </section>
 
-  <!-- EQUIPAMENTOS -->
+  <!-- EQUIPAMENTOS / PÁTIO -->
   <section class="panel col-4" style="--accent:var(--amber)">
-    <div class="phead"><span class="tag">Equipamentos</span><span class="desc">veículos em piso × programado</span></div>
-    <div id="equip"></div>
+    <div class="phead"><span class="tag">Equipamentos</span><span class="desc">pátio · vazios e em andamento por galpão</span></div>
+    <div class="patio" id="patio"></div>
   </section>
 
   <!-- PROGRAMAÇÃO -->
   <section class="panel col-6" style="--accent:var(--info)">
-    <div class="phead"><span class="tag">Programação</span><span class="desc">programado × realizado por galpão</span></div>
+    <div class="phead"><span class="tag">Programação</span><span class="desc">volume e veículos · programado × realizado por galpão</span></div>
     <div id="prog"></div>
   </section>
 
@@ -248,7 +291,8 @@ const DEMO = {
     VEICULOS_PROGRAMADOS_P2:6,VEICULOS_PROGRAMADOS_P3:4,VEICULOS_DISPONIVEIS_P2:10,VEICULOS_DISPONIVEIS_P3:3,
     VOLUME_PROGRAMADO_P2:1000,VOLUME_REALIZADO_P2:700,VOLUME_PROGRAMADO_P3:900,VOLUME_REALIZADO_P3:1030,
     QTDE_VOLUME_CTE:8480,QTDE_VOLUME_LIDO:7912,
-    DOCAS_EM_USO_P2:5,DOCAS_EM_USO_P3:3,VEICULOS_VAZIOS:2,VEICULOS_LIBERADOS:9,VEICULOS_EM_ANDAMENTO:4 },
+    DOCAS_EM_USO_P2:5,DOCAS_EM_USO_P3:3,VEICULOS_VAZIOS:2,VEICULOS_LIBERADOS:9,VEICULOS_EM_ANDAMENTO:4,
+    VEICULOS_VAZIOS_P2:2,VEICULOS_VAZIOS_P3:1,VEICULOS_EM_ANDAMENTO_P2:3,VEICULOS_EM_ANDAMENTO_P3:1 },
   ondas:[
     {ONDA:"AMARELA",CICLO:1,HORA_CONTROLE_CARREGAMENTO:"06:20",HORA_NF_GM:"07:05",EMISSÃO_CTE:"07:40",HORA_VEICULO_EXPEDIDO:"08:15"},
     {ONDA:"VERMELHA",CICLO:1,HORA_CONTROLE_CARREGAMENTO:"12:10",HORA_NF_GM:"12:45",EMISSÃO_CTE:"13:10",HORA_VEICULO_EXPEDIDO:""},
@@ -303,6 +347,17 @@ function render(d){
   setStat("q_acid",I.ACIDENTES); setStat("q_inc",I.INCIDENTES);
   $("q_oco").querySelector(".n").textContent=num(I.OCORRÊNCIAS);
 
+  // RH — absenteísmo geral e por galpão (planejado - disponível)/planejado
+  const planG2=num(I.HC_PLANEJADO_T1_P2)+num(I.HC_PLANEJADO_T2_P2);
+  const dispG2=num(I.HC_DISPONIVEL_T1_P2)+num(I.HC_DISPONIVEL_T2_P2);
+  const planG3=num(I.HC_PLANEJADO_T1_P3)+num(I.HC_PLANEJADO_T2_P3);
+  const dispG3=num(I.HC_DISPONIVEL_T1_P3)+num(I.HC_DISPONIVEL_T2_P3);
+  const planT=planG2+planG3, dispT=dispG2+dispG3;
+  const abs=(pl,di)=>pl>0?(pl-di)/pl:0;
+  const absCor=a=>a<=0.05?"var(--good)":a<=0.10?"var(--warn)":"var(--bad)";
+  $("rhAbs").innerHTML=[["Geral",abs(planT,dispT)],["Galpão 2",abs(planG2,dispG2)],["Galpão 3",abs(planG3,dispG3)]]
+    .map(([l,a])=>`<div class="abs"><div class="abs-n" style="color:${absCor(a)}">${Math.round(a*100)}%</div><div class="abs-l">Absent. ${l}</div></div>`).join("");
+
   // RH — HC por turno/galpão (planejado x disponível)
   $("rh").innerHTML =
     bar("Turno 1 · Galpão 2", I.HC_DISPONIVEL_T1_P2, I.HC_PLANEJADO_T1_P2) +
@@ -310,15 +365,20 @@ function render(d){
     bar("Turno 2 · Galpão 2", I.HC_DISPONIVEL_T2_P2, I.HC_PLANEJADO_T2_P2) +
     bar("Turno 2 · Galpão 3", I.HC_DISPONIVEL_T2_P3, I.HC_PLANEJADO_T2_P3);
 
-  // Equipamentos — veículos disponíveis x programados
-  $("equip").innerHTML =
-    bar("Galpão 2 · disponível × prog.", I.VEICULOS_DISPONIVEIS_P2, I.VEICULOS_PROGRAMADOS_P2) +
-    bar("Galpão 3 · disponível × prog.", I.VEICULOS_DISPONIVEIS_P3, I.VEICULOS_PROGRAMADOS_P3);
+  // Equipamentos / pátio — vazios e em andamento por galpão
+  $("patio").innerHTML = [
+    ["Vazios · G2",I.VEICULOS_VAZIOS_P2,"var(--muted)"],
+    ["Vazios · G3",I.VEICULOS_VAZIOS_P3,"var(--muted)"],
+    ["Andamento · G2",I.VEICULOS_EM_ANDAMENTO_P2,"var(--amber)"],
+    ["Andamento · G3",I.VEICULOS_EM_ANDAMENTO_P3,"var(--amber)"],
+  ].map(([l,v,c])=>`<div class="pnum"><div class="pn" style="color:${c}">${fmt(v)}</div><div class="pl">${l}</div></div>`).join("");
 
-  // Programação — volume programado x realizado por galpão
+  // Programação — volume + veículos (programado × realizado/disponível) por galpão
   $("prog").innerHTML =
     bar("Volume · Galpão 2", I.VOLUME_REALIZADO_P2, I.VOLUME_PROGRAMADO_P2) +
-    bar("Volume · Galpão 3", I.VOLUME_REALIZADO_P3, I.VOLUME_PROGRAMADO_P3);
+    bar("Volume · Galpão 3", I.VOLUME_REALIZADO_P3, I.VOLUME_PROGRAMADO_P3) +
+    bar("Veículos · Galpão 2", I.VEICULOS_DISPONIVEIS_P2, I.VEICULOS_PROGRAMADOS_P2) +
+    bar("Veículos · Galpão 3", I.VEICULOS_DISPONIVEIS_P3, I.VEICULOS_PROGRAMADOS_P3);
 
   // Performance — CTE x bipado
   const cte=num(I.QTDE_VOLUME_CTE), lido=num(I.QTDE_VOLUME_LIDO);
@@ -327,13 +387,15 @@ function render(d){
   $("bipPct").textContent = Math.round(p*100)+"%";
   $("bipPct").style.color = stateColor(p);
 
-  // Ops chips
+  // Ops chips — docas por galpão, liberados, e totais de pátio
+  const vazT=num(I.VEICULOS_VAZIOS_P2)+num(I.VEICULOS_VAZIOS_P3);
+  const andT=num(I.VEICULOS_EM_ANDAMENTO_P2)+num(I.VEICULOS_EM_ANDAMENTO_P3);
   $("ops").innerHTML = [
     ["Docas Galpão 2",I.DOCAS_EM_USO_P2,"var(--info)"],
     ["Docas Galpão 3",I.DOCAS_EM_USO_P3,"var(--info)"],
-    ["Veíc. vazios",I.VEICULOS_VAZIOS,"var(--muted)"],
     ["Liberados",I.VEICULOS_LIBERADOS,"var(--good)"],
-    ["Em andamento",I.VEICULOS_EM_ANDAMENTO,"var(--amber)"],
+    ["Vazios (total)",vazT,"var(--muted)"],
+    ["Em andamento (total)",andT,"var(--amber)"],
   ].map(([l,v,c])=>`<div class="chip"><div class="c-n" style="color:${c}">${fmt(v)}</div><div class="c-l">${l}</div></div>`).join("");
 
   // Ondas
@@ -418,10 +480,16 @@ function hojeBR(){ return new Date().toLocaleDateString("pt-BR",{day:"2-digit",m
 function brParaISO(br){ const m=br.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m?`${m[3]}-${m[2]}-${m[1]}`:""; }
 function isoParaBR(iso){ const m=iso.match(/(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:""; }
 
+let SEL_PERIODO = "dia";
+function trocarPeriodo(p){
+  SEL_PERIODO=p;
+  ["dia","semana","mes"].forEach(x=>$("p"+x.charAt(0).toUpperCase()+x.slice(1)).classList.toggle("on",x===p));
+  refresh();
+}
 function trocarData(){
   const iso=$("dashDate").value;
   const br=isoParaBR(iso);
-  SEL_DATE = (br===hojeBR())?"":br;         // se escolher hoje, volta a "ao vivo"
+  SEL_DATE = (br===hojeBR() && SEL_PERIODO==="dia")?"":br;
   $("btnHoje").classList.toggle("on", SEL_DATE==="");
   refresh();
 }
@@ -431,9 +499,25 @@ function voltarHoje(){
   $("btnHoje").classList.add("on");
   refresh();
 }
+function toggleTV(){
+  const b=document.body;
+  if(!document.fullscreenElement){
+    (document.documentElement.requestFullscreen?document.documentElement.requestFullscreen():Promise.resolve()).catch(()=>{});
+    b.classList.add("tv");$("btnTV").classList.add("on");
+  }else{
+    (document.exitFullscreen?document.exitFullscreen():Promise.resolve()).catch(()=>{});
+  }
+}
+document.addEventListener("fullscreenchange",()=>{
+  const on=!!document.fullscreenElement;
+  document.body.classList.toggle("tv",on);
+  $("btnTV").classList.toggle("on",on);
+});
 
 async function loadLive(){
-  const p = "api=dados" + (SEL_DATE ? "&data="+encodeURIComponent(SEL_DATE) : "");
+  const dataParam = (SEL_DATE || (SEL_PERIODO!=="dia" ? hojeBR() : "")) ;
+  let p = "api=dados&periodo="+SEL_PERIODO;
+  if(dataParam) p += "&data="+encodeURIComponent(dataParam);
   const d = await jsonp(p);
   return { info:d.info||{}, ondas:d.ondas||[], timeline:d.timeline||[], data:d.data, hoje:d.hoje };
 }
@@ -441,24 +525,28 @@ async function loadLive(){
 let refreshing=false;
 async function refresh(){
   if(!WEBAPP_URL){ setLive(false); render(DEMO); return; }
-  if(refreshing) return;               // fila de 1: evita empilhar requisições
+  if(refreshing) return;
   refreshing=true;
   try{
     const d = await loadLive();
+    const rot = SEL_PERIODO==="semana" ? "SEMANA" : SEL_PERIODO==="mes" ? "MÊS" : "";
     const historico = SEL_DATE && SEL_DATE!==hojeBR();
-    setLive(true, historico ? ("HISTÓRICO · "+SEL_DATE) : "AO VIVO");
+    let txt = "AO VIVO";
+    if(rot) txt = rot + (d.data?(" · "+d.data):"");
+    else if(historico) txt = "HISTÓRICO · "+SEL_DATE;
+    setLive(true, txt);
     render(d);
   }catch(e){
     console.error("Falha ao ler dados do app web:",e);
-    setLive(false,"RECONECTANDO…");     // mantém o último render na tela
+    setLive(false,"RECONECTANDO…");
   }finally{
     refreshing=false;
   }
 }
 function setLive(on,txt){
   const el=$("live");
-  const hist = on && txt && txt.indexOf("HISTÓRICO")===0;
-  el.classList.toggle("demo", !on || hist);   // amarelo p/ histórico ou offline
+  const especial = on && txt && txt!=="AO VIVO";
+  el.classList.toggle("demo", !on || especial);
   $("liveTxt").textContent = txt || (on?"AO VIVO":"MODO EXEMPLO");
 }
 
