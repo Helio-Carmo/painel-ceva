@@ -41,6 +41,13 @@ a{color:inherit}
 .live .dot{width:7px;height:7px;border-radius:50%;background:var(--good);
   box-shadow:0 0 0 0 var(--good);animation:pulse 2s infinite}
 .live.demo{color:var(--warn)} .live.demo .dot{background:var(--warn);animation:none}
+.datepick{display:flex;align-items:center;gap:8px}
+.datepick label{font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint)}
+.datepick input{background:#0f1620;border:1px solid var(--line);border-radius:8px;color:var(--ink);
+  font-family:var(--mono);font-size:13px;padding:7px 9px;color-scheme:dark}
+.datepick button{background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--ink);
+  font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:1px;text-transform:uppercase;padding:7px 12px;cursor:pointer}
+.datepick button.on{background:var(--amber);color:#0d1219;border-color:var(--amber)}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,211,154,.5)}70%{box-shadow:0 0 0 7px rgba(47,211,154,0)}100%{box-shadow:0 0 0 0 rgba(47,211,154,0)}}
 
 /* ---------- grid ---------- */
@@ -145,6 +152,11 @@ a{color:inherit}
     <span class="sub">Torre de Controle · Expedição</span>
   </div>
   <div class="spacer"></div>
+  <div class="datepick">
+    <label>Data</label>
+    <input type="date" id="dashDate" onchange="trocarData()">
+    <button id="btnHoje" onclick="voltarHoje()">Hoje</button>
+  </div>
   <div>
     <div class="clock" id="clock">--:--:--</div>
     <div class="stamp"><span class="live" id="live"><span class="dot"></span><span id="liveTxt">AO VIVO</span></span> · <span id="stamp">atualizado --:--</span></div>
@@ -396,20 +408,38 @@ function jsonp(params){
     document.body.appendChild(s);
   });
 }
+/* ---- data selecionada ('' = hoje/ao vivo) ---- */
+let SEL_DATE = "";   // formato dd/mm/aaaa
+function hojeBR(){ return new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"}); }
+function brParaISO(br){ const m=br.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m?`${m[3]}-${m[2]}-${m[1]}`:""; }
+function isoParaBR(iso){ const m=iso.match(/(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:""; }
+
+function trocarData(){
+  const iso=$("dashDate").value;
+  const br=isoParaBR(iso);
+  SEL_DATE = (br===hojeBR())?"":br;         // se escolher hoje, volta a "ao vivo"
+  $("btnHoje").classList.toggle("on", SEL_DATE==="");
+  refresh();
+}
+function voltarHoje(){
+  SEL_DATE="";
+  $("dashDate").value=brParaISO(hojeBR());
+  $("btnHoje").classList.add("on");
+  refresh();
+}
+
 async function loadLive(){
-  const d = await jsonp("api=dados");        // já vem filtrado para o dia atual pelo servidor
-  return { info:d.info||{}, ondas:d.ondas||[], timeline:d.timeline||[] };
+  const p = "api=dados" + (SEL_DATE ? "&data="+encodeURIComponent(SEL_DATE) : "");
+  const d = await jsonp(p);
+  return { info:d.info||{}, ondas:d.ondas||[], timeline:d.timeline||[], data:d.data, hoje:d.hoje };
 }
 
 async function refresh(){
-  if(!WEBAPP_URL){
-    setLive(false);
-    render(DEMO);
-    return;
-  }
+  if(!WEBAPP_URL){ setLive(false); render(DEMO); return; }
   try{
     const d = await loadLive();
-    setLive(true);
+    const historico = SEL_DATE && SEL_DATE!==hojeBR();
+    setLive(true, historico ? ("HISTÓRICO · "+SEL_DATE) : "AO VIVO");
     render(d);
   }catch(e){
     console.error("Falha ao ler dados do app web:",e);
@@ -418,13 +448,16 @@ async function refresh(){
 }
 function setLive(on,txt){
   const el=$("live");
-  el.classList.toggle("demo",!on);
+  const hist = on && txt && txt.indexOf("HISTÓRICO")===0;
+  el.classList.toggle("demo", !on || hist);   // amarelo p/ histórico ou offline
   $("liveTxt").textContent = txt || (on?"AO VIVO":"MODO EXEMPLO");
 }
 
 /* clock */
 setInterval(()=>{$("clock").textContent=new Date().toLocaleTimeString("pt-BR");},1000);
 $("clock").textContent=new Date().toLocaleTimeString("pt-BR");
+$("dashDate").value=brParaISO(hojeBR());
+$("btnHoje").classList.add("on");
 
 refresh();
 setInterval(refresh, REFRESH_MS);
