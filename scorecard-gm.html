@@ -378,6 +378,7 @@ function bar(label, real, meta, opts={}){
    ============================================================ */
 function render(d){
   const I = d.info;
+  REF_DIA = d.data || (I && I.DATA_HORA ? String(I.DATA_HORA).slice(0,10) : "");
 
   // QHSE
   const setStat=(el,v)=>{const n=num(v);$(el).querySelector(".n").textContent=n;
@@ -442,6 +443,16 @@ function render(d){
   $("stamp").textContent="atualizado "+new Date().toLocaleTimeString("pt-BR");
 }
 
+/* mostra HH:mm; se for de outro dia, mostra dd/MM HH:mm */
+let REF_DIA="";
+function hhmm(v,ref){
+  if(!v) return "";
+  const s=String(v).trim();
+  const m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})/);
+  if(!m) return s;
+  const dia=m[1]+"/"+m[2]+"/"+m[3];
+  return (ref && dia!==ref) ? (m[1]+"/"+m[2]+" "+m[4]) : m[4];
+}
 function renderOndas(rows){
   if(!rows||!rows.length){$("ondas").innerHTML='<div class="empty">Sem ondas lançadas ainda.</div>';return;}
   const ord=[...rows].sort((a,b)=>{
@@ -454,7 +465,7 @@ function renderOndas(rows){
     const col=r.COR_HEX||WAVE_COLORS[nm]||"var(--faint)";
     const cic=num(r.CICLO);
     const badge=cic>1?` <span style="color:var(--faint);font-size:10px">·${cic}</span>`:"";
-    const cell=v=>v?`<span class="t ok">${v}</span>`:`<span class="t no">—</span>`;
+    const cell=v=>{const t=hhmm(v,REF_DIA);return t?`<span class="t ok">${t}</span>`:`<span class="t no">—</span>`;};
     h+=`<div class="wave">
       <span class="wave-name"><span class="wave-dot" style="background:${col}"></span>${nm}${badge}</span>
       ${cell(r.HORA_CONTROLE_CARREGAMENTO)}${cell(r.HORA_NF_GM)}${cell(r["EMISSÃO_CTE"]||r.EMISSAO_CTE)}${cell(r.HORA_VEICULO_EXPEDIDO)}
@@ -478,7 +489,7 @@ function renderTimeline(rows){
     const lastDone = filled.lastIndexOf(true);
     let cells="";
     stations.forEach(([lbl,k],i)=>{
-      const v=r[k]?String(r[k]).trim():"";
+      const v=hhmm(r[k],REF_DIA);
       const cls = v? (i===lastDone?"now":"done") : "";
       cells+=`<div class="station ${cls}"><div class="node"></div>
         <div class="s-t ${v?'':'pend'}">${v||"—"}</div><div class="s-l">${lbl}</div></div>`;
