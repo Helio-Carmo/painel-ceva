@@ -451,7 +451,7 @@ function renderOndas(rows){
   let h=`<div class="wave head"><span>Onda</span><span>Controle</span><span>NF GM</span><span>CTE</span><span>Expedição</span></div>`;
   ord.forEach(r=>{
     const nm=(r.ONDA||"—").toString().toUpperCase();
-    const col=WAVE_COLORS[nm]||"var(--faint)";
+    const col=r.COR_HEX||WAVE_COLORS[nm]||"var(--faint)";
     const cic=num(r.CICLO);
     const badge=cic>1?` <span style="color:var(--faint);font-size:10px">·${cic}</span>`:"";
     const cell=v=>v?`<span class="t ok">${v}</span>`:`<span class="t no">—</span>`;
