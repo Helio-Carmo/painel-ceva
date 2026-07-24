@@ -179,7 +179,7 @@ body.tv.sa .slide-ind i:nth-child(1),body.tv.sb .slide-ind i:nth-child(2){backgr
   text-transform:uppercase;font-weight:600}
 
 /* ---------- ondas board ---------- */
-.wave{display:grid;grid-template-columns:96px repeat(4,1fr);gap:0;align-items:center;
+.wave{display:grid;grid-template-columns:minmax(150px,auto) repeat(4,1fr);gap:0;align-items:center;
   border-top:1px solid var(--line);padding:9px 0;font-size:12px}
 .wave.head{border-top:none;padding-bottom:8px}
 .wave.head span{font-family:var(--cond);font-weight:600;font-size:11px;letter-spacing:1px;
@@ -453,6 +453,13 @@ function hhmm(v,ref){
   const dia=m[1]+"/"+m[2]+"/"+m[3];
   return (ref && dia!==ref) ? (m[1]+"/"+m[2]+" "+m[4]) : m[4];
 }
+/* sempre dd/MM HH:mm (quando há data no valor) */
+function dtHora(v){
+  if(!v) return "";
+  const s=String(v).trim();
+  const m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})/);
+  return m ? (m[1]+"/"+m[2]+" "+m[4]) : s;
+}
 function renderOndas(rows){
   if(!rows||!rows.length){$("ondas").innerHTML='<div class="empty">Sem ondas lançadas ainda.</div>';return;}
   const ord=[...rows].sort((a,b)=>{
@@ -465,7 +472,7 @@ function renderOndas(rows){
     const col=r.COR_HEX||WAVE_COLORS[nm]||"var(--faint)";
     const cic=num(r.CICLO);
     const badge=cic>1?` <span style="color:var(--faint);font-size:10px">·${cic}</span>`:"";
-    const cell=v=>{const t=hhmm(v,REF_DIA);return t?`<span class="t ok">${t}</span>`:`<span class="t no">—</span>`;};
+    const cell=v=>{const t=dtHora(v);return t?`<span class="t ok">${t}</span>`:`<span class="t no">—</span>`;};
     h+=`<div class="wave">
       <span class="wave-name"><span class="wave-dot" style="background:${col}"></span>${nm}${badge}</span>
       ${cell(r.HORA_CONTROLE_CARREGAMENTO)}${cell(r.HORA_NF_GM)}${cell(r["EMISSÃO_CTE"]||r.EMISSAO_CTE)}${cell(r.HORA_VEICULO_EXPEDIDO)}
