@@ -114,6 +114,16 @@ body.tv .slide-ind{display:flex;gap:6px;justify-content:center;margin-top:12px}
 body.tv .slide-ind i{width:26px;height:5px;border-radius:3px;background:var(--line2)}
 body.tv.sa .slide-ind i:nth-child(1),body.tv.sb .slide-ind i:nth-child(2){background:var(--amber)}
 #grid{transition:transform .3s ease}
+
+/* aviso de carregando ao trocar filtro */
+.dashload{position:fixed;inset:0;background:rgba(8,12,18,.55);backdrop-filter:blur(1px);
+  display:flex;align-items:center;justify-content:center;z-index:900}
+.dashload.hidden{display:none}
+.dl-box{display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--line2);
+  border-radius:14px;padding:18px 26px;font-size:15px;color:var(--ink)}
+.dl-spin{width:26px;height:26px;border:3px solid var(--line2);border-top-color:var(--amber);
+  border-radius:50%;animation:dlsp .8s linear infinite}
+@keyframes dlsp{to{transform:rotate(360deg)}}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,211,154,.5)}70%{box-shadow:0 0 0 7px rgba(47,211,154,0)}100%{box-shadow:0 0 0 0 rgba(47,211,154,0)}}
 
 /* ---------- grid ---------- */
@@ -301,6 +311,8 @@ body.tv.sa .slide-ind i:nth-child(1),body.tv.sb .slide-ind i:nth-child(2){backgr
   </section>
 </div>
 <div class="slide-ind"><i></i><i></i></div>
+
+<div id="dashLoad" class="dashload hidden"><div class="dl-box"><div class="dl-spin"></div><span id="dlTxt">Carregando…</span></div></div>
 
 <div class="foot">Scorecard Operação GM · dados via Google Sheets · atualização automática a cada 60s</div>
 
@@ -591,7 +603,7 @@ function atualizarFiltro(){
     SEL_DATA=dataBR(new Date(y,mo-1,1));
     SEL_LABEL=MESES[mo-1]+" · "+y;
   }
-  refresh();
+  refresh(true);
 }
 function voltarHoje(){
   $("dashDate").value=brParaISO(hojeBR());
@@ -641,9 +653,12 @@ async function loadLive(){
 }
 
 let reqId=0;
-async function refresh(){
+function showLoad(txt){ $("dlTxt").textContent=txt||"Carregando…"; $("dashLoad").classList.remove("hidden"); }
+function hideLoad(){ $("dashLoad").classList.add("hidden"); }
+async function refresh(manual){
   if(!WEBAPP_URL){ setLive(false); render(DEMO); fitTV(); return; }
   const meu=++reqId;                     // marca esta requisição
+  if(manual) showLoad("Carregando "+SEL_LABEL.replace(/^AO VIVO$/,"hoje")+"…");
   try{
     const d=await loadLive();
     if(meu!==reqId) return;              // chegou uma mais nova: descarta esta
@@ -654,6 +669,8 @@ async function refresh(){
     if(meu!==reqId) return;              // erro de uma requisição já superada: ignora
     console.error("Falha ao ler dados do app web:",e);
     setLive(false,"RECONECTANDO…");
+  }finally{
+    if(meu===reqId) hideLoad();
   }
 }
 function setLive(on,txt){
