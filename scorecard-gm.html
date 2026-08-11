@@ -417,7 +417,7 @@ function render(d){
   // Performance — CTE x bipado
   const cte=num(I.QTDE_VOLUME_CTE), lido=num(I.QTDE_VOLUME_LIDO);
   $("cte").textContent=fmt(cte); $("lido").textContent=fmt(lido);
-  const p = cte>0? lido/cte : 0;
+  const p = lido>0 ? cte/lido : 0;      // aderência = emitido / bipado
   $("bipPct").textContent = Math.round(p*100)+"%";
   $("bipPct").style.color = stateColor(p);
 
@@ -518,7 +518,7 @@ function jsonp(params){
     function finish(fn,arg){
       if(settled) return; settled=true;
       window[cb]=function(){};          // vira no-op: resposta atrasada não quebra
-      setTimeout(()=>{ try{delete window[cb];}catch(e){} }, 60000);
+      setTimeout(()=>{ try{delete window[cb];}catch(e){} }, 120000);
       s.remove(); fn(arg);
     }
     window[cb]=d=>finish(resolve,d);
@@ -640,20 +640,21 @@ async function loadLive(){
   return { info:d.info||{}, ondas:d.ondas||[], timeline:d.timeline||[], data:d.data, hoje:d.hoje };
 }
 
-let refreshing=false;
+let reqId=0;
 async function refresh(){
   if(!WEBAPP_URL){ setLive(false); render(DEMO); fitTV(); return; }
-  if(refreshing) return;
-  refreshing=true;
+  const meu=++reqId;                     // marca esta requisição
   try{
     const d=await loadLive();
+    if(meu!==reqId) return;              // chegou uma mais nova: descarta esta
     setLive(true, SEL_LABEL);
     render(d);
     fitTV();
   }catch(e){
+    if(meu!==reqId) return;              // erro de uma requisição já superada: ignora
     console.error("Falha ao ler dados do app web:",e);
     setLive(false,"RECONECTANDO…");
-  }finally{ refreshing=false; }
+  }
 }
 function setLive(on,txt){
   const el=$("live");
