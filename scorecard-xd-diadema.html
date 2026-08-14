@@ -507,7 +507,7 @@ function renderVolume(){
     const ch=new Chart(ctx,{type:'bar',data:{labels,datasets:[
         {label:'Entrada',data:ent,backgroundColor:'rgba(53,214,208,.85)',borderRadius:4,maxBarThickness:22},
         {label:'Saída',data:sai,backgroundColor:'rgba(63,208,127,.85)',borderRadius:4,maxBarThickness:22},
-      ]}, options:volumeOpts()});
+      ]}, options:volumeOpts(ent,sai)});
     state.charts.push(ch);
   });
 }
@@ -565,16 +565,25 @@ function baseChartOpts(){
       y:{grid:{color:grid},ticks:{color:tick,font:{size:11},callback:v=>fmtNum(v)},beginAtZero:true,grace:'12%'}
     }};
 }
-// rótulos sobre as barras de volume: modo "auto" esconde os que sobrepõem
-function volumeOpts(){
+// índices das K maiores barras (ignora zeros)
+function topIndices(arr, k){
+  return new Set(arr.map((v,i)=>[v,i]).filter(p=>p[0]>0)
+    .sort((a,b)=>b[0]-a[0]).slice(0,k).map(p=>p[1]));
+}
+// rótulos de volume: tudo quando há poucas barras, só os picos quando há muitas
+function volumeOpts(ent, sai){
+  const n=ent.length, SHOW_ALL = n<=12;
+  const keepE = SHOW_ALL?null:topIndices(ent,5), keepS = SHOW_ALL?null:topIndices(sai,5);
   const o=baseChartOpts();
   o.layout.padding.top=24;
   o.plugins.datalabels={
     display:(ctx)=>{ if(!state.showLabels) return false;
-      const v=ctx.dataset.data[ctx.dataIndex]||0; return v>0 ? 'auto' : false; },
+      const v=ctx.dataset.data[ctx.dataIndex]||0; if(v<=0) return false;
+      if(SHOW_ALL) return 'auto';
+      return (ctx.datasetIndex===0?keepE:keepS).has(ctx.dataIndex); },
     anchor:'end', align:'end', rotation:-90, offset:3, clamp:false, clip:false,
-    color:(ctx)=> ctx.datasetIndex===0 ? 'rgba(120,232,228,.95)' : 'rgba(120,227,178,.95)',
-    font:{family:'Barlow Semi Condensed', weight:'700', size:10},
+    color:(ctx)=> ctx.datasetIndex===0 ? 'rgba(155,224,222,.8)' : 'rgba(160,220,185,.8)',
+    font:{family:'Inter', weight:'400', size:9},
     formatter:(v)=> v>=1000
       ? (v/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})+'k'
       : fmtNum(v)
