@@ -12,6 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 
 <style>
 :root{
@@ -91,6 +92,11 @@ body{
 .clock .live{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:10px;margin-top:5px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(63,208,127,.7);animation:pulse 2s infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(63,208,127,.6)}70%{box-shadow:0 0 0 9px rgba(63,208,127,0)}100%{box-shadow:0 0 0 0 rgba(63,208,127,0)}}
+
+input.sel{background-image:none;padding-right:12px;min-width:140px}
+input.sel::-webkit-calendar-picker-indicator{filter:invert(.65);cursor:pointer}
+.btn.tgl{background:var(--panel);border:1px solid var(--line);color:var(--muted)}
+.btn.tgl.on{background:var(--blue);color:#04121f;border-color:transparent}
 
 /* ===== banner demo ===== */
 .banner{
@@ -214,7 +220,14 @@ body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:16px}
       <div class="selwrap"><label>Mês</label>
         <select id="fMes" class="sel"><option value="TODOS">Todos</option></select>
       </div>
+      <div class="selwrap"><label>De</label>
+        <input type="date" id="fDe" class="sel" title="Data inicial">
+      </div>
+      <div class="selwrap"><label>Até</label>
+        <input type="date" id="fAte" class="sel" title="Data final">
+      </div>
 
+      <button id="btnLabels" class="btn tgl on" title="Mostrar/ocultar rótulos">Rótulos</button>
       <button id="btnHoje" class="btn amber" title="Limpar filtros">Hoje</button>
       <button id="btnTv" class="btn ghost">TV</button>
 
@@ -293,12 +306,14 @@ const csvUrl = (sheet) =>
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const COR = { EATON:'var(--blue)', GM:'var(--green)', _default:'var(--violet)' };
 const corCliente = (c) => COR[c] || COR._default;
+try{ if(window.ChartDataLabels) Chart.register(window.ChartDataLabels); }catch(e){}
 
 /* ================= ESTADO ================= */
 const state = {
   agregado: [], aging: [], clientes: [], anos: [],
-  filtro: { cliente:'TODOS', ano:'TODOS', mes:'TODOS', periodo:'DIA' },
+  filtro: { cliente:'TODOS', ano:'TODOS', mes:'TODOS', periodo:'DIA', de:'', ate:'' },
   demo: false,
+  showLabels: true,
   charts: [],
   tv: { on:false, idx:0, timer:null },
 };
@@ -403,7 +418,10 @@ function populateFilters(){
 function matchFiltro(r){
   const f=state.filtro;
   if(f.cliente!=='TODOS' && r.cliente!==f.cliente) return false;
-  if(!r.date) return f.ano==='TODOS' && f.mes==='TODOS';
+  if(!r.date) return f.ano==='TODOS' && f.mes==='TODOS' && !f.de && !f.ate;
+  const t=r.date.getTime();
+  if(f.de){ const d=parseDate(f.de); if(d && t < d.getTime()) return false; }
+  if(f.ate){ const d=parseDate(f.ate); if(d){ d.setHours(23,59,59,999); if(t > d.getTime()) return false; } }
   if(f.ano!=='TODOS' && r.date.getFullYear()!=+f.ano) return false;
   if(f.mes!=='TODOS' && (r.date.getMonth()+1)!=+f.mes) return false;
   return true;
@@ -489,7 +507,7 @@ function renderVolume(){
     const ch=new Chart(ctx,{type:'bar',data:{labels,datasets:[
         {label:'Entrada',data:ent,backgroundColor:'rgba(53,214,208,.85)',borderRadius:4,maxBarThickness:22},
         {label:'Saída',data:sai,backgroundColor:'rgba(63,208,127,.85)',borderRadius:4,maxBarThickness:22},
-      ]}, options:baseChartOpts()});
+      ]}, options:volumeOpts()});
     state.charts.push(ch);
   });
 }
@@ -523,7 +541,11 @@ function renderAging(){
         datasets:[{data:[zero.length,pos.length],
           backgroundColor:['rgba(255,176,32,.9)','rgba(255,91,82,.9)'],
           borderRadius:6,maxBarThickness:80}]},
-      options:{...baseChartOpts(), plugins:{legend:{display:false},tooltip:tooltipCfg()},
+      options:{...baseChartOpts(), plugins:{legend:{display:false},tooltip:tooltipCfg(),
+        datalabels:{ display:()=>state.showLabels, anchor:'end', align:'top', offset:2, clamp:false, clip:false,
+          color:(ctx)=> ctx.dataIndex===0 ? '#ffb020' : '#ff5b52',
+          font:{family:'Barlow Semi Condensed', weight:'800', size:16},
+          formatter:(v)=> fmtNum(v) } },
         onClick:(e,els)=>{ if(!els.length) return; const i=els[0].index;
           openAgingModal(cli, i===0?'0':'+0', i===0?zero:pos); },
         onHover:(e,els)=>{ e.native.target.style.cursor = els.length?'pointer':'default'; }
@@ -536,11 +558,24 @@ function baseChartOpts(){
   const grid='rgba(255,255,255,.05)', tick='#8593a8';
   return {responsive:true,maintainAspectRatio:false,
     interaction:{mode:'index',intersect:false},
-    plugins:{legend:{display:false},tooltip:tooltipCfg()},
+    layout:{padding:{top:18}},
+    plugins:{legend:{display:false},tooltip:tooltipCfg(),datalabels:{display:false}},
     scales:{
-      x:{grid:{display:false},ticks:{color:tick,font:{size:11},maxRotation:0,autoSkipPadding:14}},
-      y:{grid:{color:grid},ticks:{color:tick,font:{size:11},callback:v=>fmtNum(v)},beginAtZero:true}
+      x:{grid:{display:false},ticks:{color:tick,font:{size:10},autoSkip:false,maxRotation:90,minRotation:0}},
+      y:{grid:{color:grid},ticks:{color:tick,font:{size:11},callback:v=>fmtNum(v)},beginAtZero:true,grace:'12%'}
     }};
+}
+// rótulos verticais sobre as barras de volume (entrada/saída)
+function volumeOpts(){
+  const o=baseChartOpts();
+  o.plugins.datalabels={
+    display:(ctx)=> state.showLabels && (ctx.dataset.data[ctx.dataIndex]||0)>0,
+    anchor:'end', align:'end', rotation:-90, offset:2, clamp:false, clip:false,
+    color:(ctx)=> ctx.datasetIndex===0 ? 'rgba(120,232,228,.95)' : 'rgba(120,227,178,.95)',
+    font:{family:'Barlow Semi Condensed', weight:'700', size:9},
+    formatter:(v)=> v>=1000 ? (v/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'k' : fmtNum(v)
+  };
+  return o;
 }
 function tooltipCfg(){
   return {backgroundColor:'#0c111b',borderColor:'rgba(255,255,255,.12)',borderWidth:1,
@@ -639,11 +674,25 @@ document.getElementById('periodo').addEventListener('click',e=>{
   [...e.currentTarget.children].forEach(x=>x.classList.remove('on')); b.classList.add('on');
   state.filtro.periodo=b.dataset.p; render();
 });
+const $de=document.getElementById('fDe'), $ate=document.getElementById('fAte');
+function clearRange(){ state.filtro.de=''; state.filtro.ate=''; $de.value=''; $ate.value=''; }
+function resetAnoMes(){ state.filtro.ano='TODOS'; state.filtro.mes='TODOS';
+  document.getElementById('fAno').value='TODOS'; document.getElementById('fMes').value='TODOS'; }
+
 document.getElementById('fCliente').addEventListener('change',e=>{state.filtro.cliente=e.target.value; render();});
-document.getElementById('fAno').addEventListener('change',e=>{state.filtro.ano=e.target.value; render();});
-document.getElementById('fMes').addEventListener('change',e=>{state.filtro.mes=e.target.value; render();});
+document.getElementById('fAno').addEventListener('change',e=>{state.filtro.ano=e.target.value; clearRange(); render();});
+document.getElementById('fMes').addEventListener('change',e=>{state.filtro.mes=e.target.value; clearRange(); render();});
+$de.addEventListener('change',e=>{ state.filtro.de=e.target.value; resetAnoMes(); render(); });
+$ate.addEventListener('change',e=>{ state.filtro.ate=e.target.value; resetAnoMes(); render(); });
+
+document.getElementById('btnLabels').addEventListener('click',e=>{
+  state.showLabels=!state.showLabels;
+  e.currentTarget.classList.toggle('on', state.showLabels);
+  render();
+});
 document.getElementById('btnHoje').addEventListener('click',()=>{
-  state.filtro={cliente:'TODOS',ano:'TODOS',mes:'TODOS',periodo:state.filtro.periodo};
+  state.filtro={cliente:'TODOS',ano:'TODOS',mes:'TODOS',periodo:state.filtro.periodo,de:'',ate:''};
+  $de.value=''; $ate.value='';
   populateFilters(); render();
 });
 document.getElementById('btnTv').addEventListener('click',toggleTv);
