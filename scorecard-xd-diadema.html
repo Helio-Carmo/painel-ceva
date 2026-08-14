@@ -504,9 +504,10 @@ function renderVolume(){
     if(!labels.length){ card.querySelector('.chartbox').innerHTML='<div class="empty">Sem dados no filtro atual</div>'; return; }
 
     const ctx=card.querySelector('canvas');
+    const sz=barSizing(labels.length);
     const ch=new Chart(ctx,{type:'bar',data:{labels,datasets:[
-        {label:'Entrada',data:ent,backgroundColor:'rgba(53,214,208,.85)',borderRadius:4,maxBarThickness:46,categoryPercentage:0.9,barPercentage:0.9},
-        {label:'Saída',data:sai,backgroundColor:'rgba(63,208,127,.85)',borderRadius:4,maxBarThickness:46,categoryPercentage:0.9,barPercentage:0.9},
+        {label:'Entrada',data:ent,backgroundColor:'rgba(53,214,208,.85)',borderRadius:4,maxBarThickness:sz.thick,categoryPercentage:sz.cat,barPercentage:sz.bar},
+        {label:'Saída',data:sai,backgroundColor:'rgba(63,208,127,.85)',borderRadius:4,maxBarThickness:sz.thick,categoryPercentage:sz.cat,barPercentage:sz.bar},
       ]}, options:volumeOpts()});
     state.charts.push(ch);
   });
@@ -564,6 +565,14 @@ function baseChartOpts(){
       x:{grid:{display:false},ticks:{color:tick,font:{size:10},autoSkip:false,maxRotation:90,minRotation:0}},
       y:{grid:{color:grid},ticks:{color:tick,font:{size:11},callback:v=>fmtNum(v)},beginAtZero:true,grace:'12%'}
     }};
+}
+// dimensiona barras conforme a quantidade: poucas -> par junto e grosso; muitas -> preenche
+function barSizing(n){
+  if(n<=2)  return {cat:0.20, bar:1.0,  thick:64};
+  if(n<=4)  return {cat:0.42, bar:0.95, thick:58};
+  if(n<=8)  return {cat:0.62, bar:0.92, thick:52};
+  if(n<=16) return {cat:0.82, bar:0.90, thick:46};
+  return {cat:0.92, bar:0.90, thick:40};
 }
 // rótulos em todas as colunas de volume, fonte suave (sem negrito)
 function volumeOpts(){
