@@ -620,7 +620,7 @@ function renderKpis(){
 }
 
 function computeVolumeSeries(cli){
-  const rows=filtAgregado().filter(r=>cli==='—'||r.cliente===cli);
+  const rows=state.agregado.filter(r=>(cli==='—'||r.cliente===cli) && matchDate(r));
   const porMes = state.filtro.periodo==='MES';
   const map=new Map();
   rows.forEach(r=>{const k=porMes?ymKey(r.date):r.date.getTime();
@@ -679,7 +679,7 @@ function makeAgingChart(canvas, cli, zero, pos){
   state.charts.push(ch); return ch;
 }
 function agingCard(cli){
-  const rows=filtAging().filter(r=>cli==='—'||r.cliente===cli);
+  const rows=state.aging.filter(r=>(cli==='—'||r.cliente===cli) && matchDate(r));
   const zero=rows.filter(r=>r.dias===0), pos=rows.filter(r=>r.dias>0);
   const card=document.createElement('div');
   card.className='card'; card.style.setProperty('--c', corCliente(cli));
@@ -869,13 +869,22 @@ function exportXlsx(){
   XLSX.writeFile(wb, modalTitle+'.xlsx');
 }
 
-/* ================= TV MODE ================= */
+/* ================= TV MODE (apresentação) ================= */
+function buildTvPages(){
+  const pages=[];
+  state.volClientes.forEach(cli=> pages.push({kind:'vol', cliente:cli, label:'VOLUME · '+cli}));
+  if(state.descarga.length || state.carregamento.length) pages.push({kind:'prod', label:'PRODUTIVIDADE'});
+  if(!pages.length) pages.push({kind:'vol', cliente:'—', label:'VOLUME'});
+  return pages;
+}
 function renderTV(){
   const stage=document.getElementById('tvStage'); stage.innerHTML='';
   const grid=document.createElement('div'); grid.className='tvgrid'; stage.appendChild(grid);
+  const pages=buildTvPages();
+  const page=pages[state.tv.idx % pages.length];
 
-  if(state.view==='prod'){
-    const d=filtDescarga(), c=filtCarreg();
+  if(page.kind==='prod'){
+    const d=state.descarga.filter(matchDate), c=state.carregamento.filter(matchDate);
     grid.appendChild(prodCard('Descarga · por cliente',
       {label:'Total', value:fmtNum(d.reduce((s,r)=>s+r.prod,0))}, {color:'var(--cyan)'},
       (cv)=>{ const p=sumByEntity(d,'cliente'); if(!p.length) return false; makeEntityChart(cv,p,(n)=>corClienteHex(n)); return true; },
@@ -885,22 +894,17 @@ function renderTV(){
       (cv)=>{ const p=sumByEntity(c,'rota'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corRota(n,i)); return true; },
       'Sem dados de carregamento'));
   }else{
-    const cli = state.filtro.cliente!=='TODOS' ? state.filtro.cliente
-      : (state.volClientes[state.tv.idx % Math.max(1,state.volClientes.length)] || '—');
-    grid.appendChild(volumeCard(cli));
-    grid.appendChild(agingCard(cli));
+    grid.appendChild(volumeCard(page.cliente));
+    grid.appendChild(agingCard(page.cliente));
   }
 }
 function renderTvBar(){
   const spot=document.getElementById('tvSpot'), dots=document.getElementById('tvDots');
   if(!state.tv.on){ spot.textContent=''; dots.innerHTML=''; return; }
-  if(state.view==='prod'){ spot.textContent='PRODUTIVIDADE'; dots.innerHTML=''; return; }
-  if(state.filtro.cliente!=='TODOS' || state.volClientes.length<=1){
-    spot.textContent = 'EM FOCO · '+(state.filtro.cliente!=='TODOS'?state.filtro.cliente:(state.volClientes[0]||'')); dots.innerHTML=''; return;
-  }
-  const i=state.tv.idx % state.volClientes.length;
-  spot.textContent = 'EM FOCO · '+state.volClientes[i];
-  dots.innerHTML = state.volClientes.map((c,k)=>`<i class="${k===i?'on':''}"></i>`).join('');
+  const pages=buildTvPages();
+  const i=state.tv.idx % pages.length;
+  spot.textContent = pages[i].label;
+  dots.innerHTML = pages.map((p,k)=>`<i class="${k===i?'on':''}"></i>`).join('');
 }
 function toggleTv(){
   state.tv.on=!state.tv.on;
@@ -1014,4 +1018,4 @@ loadData();
 setInterval(()=>{ loadData(); }, CONFIG.REFRESH_MS); // auto-refresh dos dados
 </script>
 </body>
-</html>
+</html>s
