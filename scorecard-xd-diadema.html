@@ -385,7 +385,7 @@ try{ if(window.ChartDataLabels) Chart.register(window.ChartDataLabels); }catch(e
 /* ================= ESTADO ================= */
 const state = {
   agregado: [], aging: [], descarga: [], carregamento: [],
-  clientes: [], rotas: [], anos: [],
+  volClientes: [], volAnos: [], prodClientes: [], rotas: [], prodAnos: [],
   filtro: { cliente:'TODOS', rota:'TODOS', ano:'TODOS', mes:'TODOS', periodo:'DIA', de:'', ate:'' },
   view: 'volumes',
   demo: false,
@@ -517,23 +517,35 @@ function parseCarregamento(rows){
   }).filter(Boolean);
 }
 function buildDerived(){
-  const cli=new Set(), rot=new Set(), anos=new Set();
-  state.agregado.forEach(r=>{cli.add(r.cliente); anos.add(r.date.getFullYear());});
-  state.aging.forEach(r=>{cli.add(r.cliente); if(r.date) anos.add(r.date.getFullYear());});
-  state.descarga.forEach(r=>{cli.add(r.cliente); if(r.date) anos.add(r.date.getFullYear());});
-  state.carregamento.forEach(r=>{rot.add(r.rota); if(r.date) anos.add(r.date.getFullYear());});
-  state.clientes=[...cli].sort();
+  const volCli=new Set(), volAnos=new Set(), prodCli=new Set(), rot=new Set(), prodAnos=new Set();
+  // Volumes: clientes/anos vêm de Dashboard_Agregado + Base_Aging
+  state.agregado.forEach(r=>{volCli.add(r.cliente); volAnos.add(r.date.getFullYear());});
+  state.aging.forEach(r=>{volCli.add(r.cliente); if(r.date) volAnos.add(r.date.getFullYear());});
+  // Produtividade: cliente vem da Descarga, rota do Carregamento, ano das duas
+  state.descarga.forEach(r=>{prodCli.add(r.cliente); if(r.date) prodAnos.add(r.date.getFullYear());});
+  state.carregamento.forEach(r=>{rot.add(r.rota); if(r.date) prodAnos.add(r.date.getFullYear());});
+  state.volClientes=[...volCli].sort();
+  state.volAnos=[...volAnos].sort((a,b)=>b-a);
+  state.prodClientes=[...prodCli].sort();
   state.rotas=[...rot].sort();
-  state.anos=[...anos].sort((a,b)=>b-a);
+  state.prodAnos=[...prodAnos].sort((a,b)=>b-a);
 }
 
 /* ================= FILTROS ================= */
 function populateFilters(){
+  const prod = state.view==='prod';
+  const clientes = prod ? state.prodClientes : state.volClientes;
+  const anos     = prod ? state.prodAnos     : state.volAnos;
   const fc=document.getElementById('fCliente'), fa=document.getElementById('fAno'),
         fm=document.getElementById('fMes'), fr=document.getElementById('fRota');
-  fc.innerHTML='<option value="TODOS">Todos</option>'+state.clientes.map(c=>`<option>${c}</option>`).join('');
+  // reconcilia seleções que não existem mais na view atual
+  if(state.filtro.cliente!=='TODOS' && !clientes.includes(state.filtro.cliente)) state.filtro.cliente='TODOS';
+  if(state.filtro.ano!=='TODOS' && !anos.map(String).includes(String(state.filtro.ano))) state.filtro.ano='TODOS';
+  if(state.filtro.rota!=='TODOS' && !state.rotas.includes(state.filtro.rota)) state.filtro.rota='TODOS';
+
+  fc.innerHTML='<option value="TODOS">Todos</option>'+clientes.map(c=>`<option>${c}</option>`).join('');
   fr.innerHTML='<option value="TODOS">Todas</option>'+state.rotas.map(r=>`<option>${r}</option>`).join('');
-  fa.innerHTML='<option value="TODOS">Todos</option>'+state.anos.map(a=>`<option>${a}</option>`).join('');
+  fa.innerHTML='<option value="TODOS">Todos</option>'+anos.map(a=>`<option>${a}</option>`).join('');
   fm.innerHTML='<option value="TODOS">Todos</option>'+MESES.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
   fc.value=state.filtro.cliente; fr.value=state.filtro.rota; fa.value=state.filtro.ano; fm.value=state.filtro.mes;
 }
@@ -555,7 +567,7 @@ const filtDescarga=()=> state.descarga.filter(matchFiltro);
 const filtCarreg=()=> state.carregamento.filter(matchFiltroRota);
 function clientesParaRenderizar(){
   if(state.filtro.cliente!=='TODOS') return [state.filtro.cliente];
-  return state.clientes.length? state.clientes : ['—'];
+  return state.volClientes.length? state.volClientes : ['—'];
 }
 
 /* ================= RENDER ================= */
@@ -874,7 +886,7 @@ function renderTV(){
       'Sem dados de carregamento'));
   }else{
     const cli = state.filtro.cliente!=='TODOS' ? state.filtro.cliente
-      : (state.clientes[state.tv.idx % Math.max(1,state.clientes.length)] || '—');
+      : (state.volClientes[state.tv.idx % Math.max(1,state.volClientes.length)] || '—');
     grid.appendChild(volumeCard(cli));
     grid.appendChild(agingCard(cli));
   }
@@ -883,12 +895,12 @@ function renderTvBar(){
   const spot=document.getElementById('tvSpot'), dots=document.getElementById('tvDots');
   if(!state.tv.on){ spot.textContent=''; dots.innerHTML=''; return; }
   if(state.view==='prod'){ spot.textContent='PRODUTIVIDADE'; dots.innerHTML=''; return; }
-  if(state.filtro.cliente!=='TODOS' || state.clientes.length<=1){
-    spot.textContent = 'EM FOCO · '+(state.filtro.cliente!=='TODOS'?state.filtro.cliente:(state.clientes[0]||'')); dots.innerHTML=''; return;
+  if(state.filtro.cliente!=='TODOS' || state.volClientes.length<=1){
+    spot.textContent = 'EM FOCO · '+(state.filtro.cliente!=='TODOS'?state.filtro.cliente:(state.volClientes[0]||'')); dots.innerHTML=''; return;
   }
-  const i=state.tv.idx % state.clientes.length;
-  spot.textContent = 'EM FOCO · '+state.clientes[i];
-  dots.innerHTML = state.clientes.map((c,k)=>`<i class="${k===i?'on':''}"></i>`).join('');
+  const i=state.tv.idx % state.volClientes.length;
+  spot.textContent = 'EM FOCO · '+state.volClientes[i];
+  dots.innerHTML = state.volClientes.map((c,k)=>`<i class="${k===i?'on':''}"></i>`).join('');
 }
 function toggleTv(){
   state.tv.on=!state.tv.on;
@@ -977,7 +989,7 @@ $de.addEventListener('change',e=>{ state.filtro.de=e.target.value; resetAnoMes()
 $ate.addEventListener('change',e=>{ state.filtro.ate=e.target.value; resetAnoMes(); render(); });
 
 document.querySelectorAll('.navitem').forEach(b=> b.addEventListener('click',()=>{
-  state.view=b.dataset.view; render();
+  state.view=b.dataset.view; populateFilters(); render();
 }));
 
 document.getElementById('btnLabels').addEventListener('click',e=>{
