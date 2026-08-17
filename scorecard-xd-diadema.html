@@ -169,17 +169,40 @@ table.data td.n{font-variant-numeric:tabular-nums;text-align:right}
 .badge.amber{background:rgba(255,176,32,.16);color:var(--amber)}
 .badge.red{background:rgba(255,91,82,.16);color:var(--red)}
 
-/* ===== TV mode ===== */
-body.tv .controls,body.tv .banner,body.tv .kpis .sub{}
-body.tv .wrap{max-width:100%;padding:26px 40px}
-body.tv .brand h1{font-size:40px}
-body.tv .kpi .v{font-size:52px}
-body.tv .card .head .who{font-size:24px}
-body.tv .chartbox{height:340px}
-body.tv .tvhide{display:none!important}
-body.tv .grid{grid-template-columns:repeat(auto-fit,minmax(560px,1fr))}
+/* ===== App layout / sidebar ===== */
+.app{display:flex;min-height:100vh}
+.sidebar{width:98px;flex:0 0 98px;background:linear-gradient(180deg,#0e1523,#0a0e17);
+  border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;
+  padding:20px 10px;gap:26px;position:sticky;top:0;height:100vh}
+.sidebar .logo{font-family:'Barlow Semi Condensed';font-weight:800;font-size:24px;color:var(--amber);
+  letter-spacing:.02em;line-height:.85;text-align:center}
+.sidebar .logo small{display:block;color:var(--muted2);font-size:8px;letter-spacing:.16em;margin-top:5px}
+.nav{display:flex;flex-direction:column;gap:10px;width:100%}
+.navitem{border:0;background:transparent;color:var(--muted);cursor:pointer;border-radius:13px;
+  padding:13px 6px;display:flex;flex-direction:column;align-items:center;gap:7px;font-size:10px;
+  font-weight:700;letter-spacing:.05em;text-transform:uppercase;transition:.15s}
+.navitem svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.navitem:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.navitem.on{color:#04121f;background:var(--blue)}
+
+.main{flex:1;min-width:0;padding:22px 26px 60px}
+.view[hidden]{display:none}
+.prod-only{display:none}
+body.view-prod .prod-only{display:flex}
+
+/* ===== TV mode (auto-ajuste a qualquer tela) ===== */
+.tvstage{display:none}
+body.tv{overflow:hidden}
+body.tv .sidebar,body.tv .controls,body.tv .banner,body.tv .view{display:none!important}
+body.tv .main{height:100vh;padding:16px 26px;display:flex;flex-direction:column}
+body.tv .top{margin-bottom:8px}
+body.tv .brand h1{font-size:34px}
+body.tv .tvstage{display:flex;flex-direction:column;flex:1;min-height:0}
+.tvstage .tvgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1;min-height:0}
+.tvstage .card{display:flex;flex-direction:column;min-height:0;margin:0}
+.tvstage .chartbox,.tvstage .chartbox.small{flex:1;height:auto;min-height:0}
 .tvbar{display:none}
-body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:8px}
 .tvbar .spot{font-family:'Barlow Semi Condensed';font-weight:800;font-size:16px;color:var(--amber);letter-spacing:.06em}
 .tvbar .dots{display:flex;gap:7px;margin-left:auto}
 .tvbar .dots i{width:9px;height:9px;border-radius:50%;background:var(--line2)}
@@ -189,84 +212,125 @@ body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:16px}
   .kpis{grid-template-columns:repeat(2,1fr)}
   .grid{grid-template-columns:1fr}
   .controls{margin-left:0;width:100%}
+  .sidebar{width:66px;flex-basis:66px}
+  .main{padding:16px}
+  .tvstage .tvgrid{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="app">
+  <!-- Menu lateral -->
+  <aside class="sidebar">
+    <div class="logo">XD<small>DIADEMA</small></div>
+    <nav class="nav">
+      <button class="navitem on" data-view="volumes">
+        <svg viewBox="0 0 24 24"><path d="M4 20V11M10 20V4M16 20v-6M22 20H2"/></svg>
+        Volumes
+      </button>
+      <button class="navitem" data-view="prod">
+        <svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+        Produt.
+      </button>
+    </nav>
+  </aside>
 
-  <!-- Header -->
-  <header class="top">
-    <div class="brand">
-      <div>
-        <h1>SCORECARD <b>XD</b></h1>
-        <div class="sub">Torre de Controle · Cross Docking Diadema</div>
+  <div class="main">
+    <!-- Header -->
+    <header class="top">
+      <div class="brand">
+        <div>
+          <h1>SCORECARD <b>XD</b></h1>
+          <div class="sub" id="subTitle">Torre de Controle · Cross Docking Diadema</div>
+        </div>
       </div>
+
+      <div class="controls">
+        <div class="seg" id="periodo" title="Granularidade dos gráficos por período">
+          <button data-p="DIA" class="on">Dia</button>
+          <button data-p="MES">Mês</button>
+        </div>
+
+        <div class="selwrap"><label>Cliente</label>
+          <select id="fCliente" class="sel"><option value="TODOS">Todos</option></select>
+        </div>
+        <div class="selwrap prod-only"><label>Rota</label>
+          <select id="fRota" class="sel"><option value="TODOS">Todas</option></select>
+        </div>
+        <div class="selwrap"><label>Ano</label>
+          <select id="fAno" class="sel"><option value="TODOS">Todos</option></select>
+        </div>
+        <div class="selwrap"><label>Mês</label>
+          <select id="fMes" class="sel"><option value="TODOS">Todos</option></select>
+        </div>
+        <div class="selwrap"><label>De</label>
+          <input type="date" id="fDe" class="sel" title="Data inicial">
+        </div>
+        <div class="selwrap"><label>Até</label>
+          <input type="date" id="fAte" class="sel" title="Data final">
+        </div>
+
+        <button id="btnLabels" class="btn tgl on" title="Mostrar/ocultar rótulos">Rótulos</button>
+        <button id="btnHoje" class="btn amber" title="Limpar filtros">Hoje</button>
+        <button id="btnTv" class="btn ghost">TV</button>
+
+        <div class="clock">
+          <div class="t num" id="clock">--:--:--</div>
+          <div class="live"><span class="dot"></span> <span id="liveTxt">carregando…</span></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="banner" id="banner">
+      <span>⚠️</span>
+      <div id="bannerTxt"><b>Modo demonstração.</b> Não consegui ler o Google Sheets — usando dados de exemplo. Publique as planilhas (Compartilhar → “Qualquer pessoa com o link · Leitor”) para dados ao vivo.</div>
     </div>
 
-    <div class="controls">
-      <div class="seg" id="periodo" title="Granularidade dos gráficos de volume">
-        <button data-p="DIA" class="on">Dia</button>
-        <button data-p="MES">Mês</button>
-      </div>
+    <!-- barra TV (spotlight) -->
+    <div class="tvbar" id="tvbar"><span class="spot" id="tvSpot"></span><div class="dots" id="tvDots"></div></div>
 
-      <div class="selwrap"><label>Cliente</label>
-        <select id="fCliente" class="sel"><option value="TODOS">Todos</option></select>
-      </div>
-      <div class="selwrap"><label>Ano</label>
-        <select id="fAno" class="sel"><option value="TODOS">Todos</option></select>
-      </div>
-      <div class="selwrap"><label>Mês</label>
-        <select id="fMes" class="sel"><option value="TODOS">Todos</option></select>
-      </div>
-      <div class="selwrap"><label>De</label>
-        <input type="date" id="fDe" class="sel" title="Data inicial">
-      </div>
-      <div class="selwrap"><label>Até</label>
-        <input type="date" id="fAte" class="sel" title="Data final">
-      </div>
-
-      <button id="btnLabels" class="btn tgl on" title="Mostrar/ocultar rótulos">Rótulos</button>
-      <button id="btnHoje" class="btn amber" title="Limpar filtros">Hoje</button>
-      <button id="btnTv" class="btn ghost">TV</button>
-
-      <div class="clock">
-        <div class="t num" id="clock">--:--:--</div>
-        <div class="live"><span class="dot"></span> <span id="liveTxt">carregando…</span></div>
-      </div>
+    <!-- ===== VIEW: VOLUMES ===== -->
+    <div id="viewVolumes" class="view">
+      <section class="kpis" id="kpis"></section>
+      <section class="section">
+        <div class="eyebrow" style="--c:var(--cyan)">
+          <span class="tag">Volume</span>
+          <span class="desc" id="volDesc">entrada × saída por dia</span>
+        </div>
+        <div class="grid" id="volGrid"></div>
+      </section>
+      <section class="section">
+        <div class="eyebrow" style="--c:var(--amber)">
+          <span class="tag">Aging</span>
+          <span class="desc">itens parados · clique na barra para ver os itens e exportar</span>
+        </div>
+        <div class="grid" id="ageGrid"></div>
+      </section>
     </div>
-  </header>
 
-  <div class="banner" id="banner">
-    <span>⚠️</span>
-    <div id="bannerTxt"><b>Modo demonstração.</b> Não consegui ler o Google Sheets — usando dados de exemplo dos prints. Publique a planilha (Compartilhar → “Qualquer pessoa com o link · Leitor”) para dados ao vivo.</div>
+    <!-- ===== VIEW: PRODUTIVIDADE ===== -->
+    <div id="viewProd" class="view" hidden>
+      <section class="kpis" id="kpisProd"></section>
+      <section class="section">
+        <div class="eyebrow" style="--c:var(--cyan)">
+          <span class="tag">Descarga</span>
+          <span class="desc" id="descDesc">produtividade por cliente · soma da coluna Produtividade</span>
+        </div>
+        <div class="grid" id="descGrid"></div>
+      </section>
+      <section class="section">
+        <div class="eyebrow" style="--c:var(--green)">
+          <span class="tag">Carregamento</span>
+          <span class="desc" id="carDesc">produtividade por rota · soma da coluna Produtividade</span>
+        </div>
+        <div class="grid" id="carGrid"></div>
+      </section>
+    </div>
+
+    <!-- Palco do modo TV (auto-ajuste) -->
+    <div id="tvStage" class="tvstage"></div>
   </div>
-
-  <!-- barra TV (spotlight) -->
-  <div class="tvbar" id="tvbar"><span class="spot" id="tvSpot"></span><div class="dots" id="tvDots"></div></div>
-
-  <!-- KPIs -->
-  <section class="kpis" id="kpis"></section>
-
-  <!-- Volume -->
-  <section class="section">
-    <div class="eyebrow" style="--c:var(--cyan)">
-      <span class="tag">Volume</span>
-      <span class="desc" id="volDesc">entrada × saída por dia</span>
-    </div>
-    <div class="grid" id="volGrid"></div>
-  </section>
-
-  <!-- Aging -->
-  <section class="section">
-    <div class="eyebrow" style="--c:var(--amber)">
-      <span class="tag">Aging</span>
-      <span class="desc">itens parados · clique na barra para ver os itens e exportar</span>
-    </div>
-    <div class="grid" id="ageGrid"></div>
-  </section>
-
 </div>
 
 <!-- Modal aging -->
@@ -297,26 +361,40 @@ const CONFIG = {
   SHEET_ID: '1p0NXq_JhFc6WmhIS-i9NewbYhZ7KaQvlEaVmX_Pojl4',
   SHEET_AGREGADO: 'Dashboard_Agregado',
   SHEET_AGING: 'Base_Aging',
+
+  // Planilha de Tracking (produtividade). Se estiver em OUTRO arquivo, cole o ID aqui;
+  // se estiver no MESMO arquivo, deixe vazio que ele usa o SHEET_ID acima.
+  SHEET_ID_TRACKING: '',
+  SHEET_DESCARGA: 'Base Descarga',
+  SHEET_CARREGAMENTO: 'Base Carregamento',
+
   REFRESH_MS: 5 * 60 * 1000,   // recarrega dados a cada 5 min
   TV_ROTATE_MS: 14 * 1000,     // troca o cliente em foco no modo TV a cada 14s
 };
-const csvUrl = (sheet) =>
-  `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}`;
+const trackingId = ()=> CONFIG.SHEET_ID_TRACKING || CONFIG.SHEET_ID;
+const csvUrl = (sheet, id) =>
+  `https://docs.google.com/spreadsheets/d/${id||CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}`;
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const COR = { EATON:'var(--blue)', GM:'var(--green)', _default:'var(--violet)' };
 const corCliente = (c) => COR[c] || COR._default;
+const COR_HEX = { EATON:'#4aa3ff', GM:'#3fd07f', _default:'#9d7bff' };
+const corClienteHex = (c)=> COR_HEX[c] || COR_HEX._default;
 try{ if(window.ChartDataLabels) Chart.register(window.ChartDataLabels); }catch(e){}
 
 /* ================= ESTADO ================= */
 const state = {
-  agregado: [], aging: [], clientes: [], anos: [],
-  filtro: { cliente:'TODOS', ano:'TODOS', mes:'TODOS', periodo:'DIA', de:'', ate:'' },
+  agregado: [], aging: [], descarga: [], carregamento: [],
+  clientes: [], rotas: [], anos: [],
+  filtro: { cliente:'TODOS', rota:'TODOS', ano:'TODOS', mes:'TODOS', periodo:'DIA', de:'', ate:'' },
+  view: 'volumes',
   demo: false,
   showLabels: true,
   charts: [],
   tv: { on:false, idx:0, timer:null },
 };
+const PALETA = ['#4aa3ff','#3fd07f','#ffb020','#9d7bff','#35d6d0','#ff5b52','#f97bd0','#7bd0ff'];
+const corRota = (r, i)=> PALETA[i % PALETA.length];
 
 /* ================= HELPERS ================= */
 const norm = (s)=> (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
@@ -351,9 +429,9 @@ const fmtNum=(n)=> Math.round(n).toLocaleString('pt-BR');
 const ymKey=(d)=> `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 
 /* ================= LOAD ================= */
-function fetchCsv(sheet){
+function fetchCsv(sheet, id){
   return new Promise((resolve,reject)=>{
-    Papa.parse(csvUrl(sheet), {
+    Papa.parse(csvUrl(sheet, id), {
       download:true, header:false, skipEmptyLines:true,
       complete:(r)=> resolve(r.data),
       error:(e)=> reject(e),
@@ -367,8 +445,21 @@ async function loadData(){
     parseAgregado(ag); parseAging(aging);
     state.demo=false; banner(false);
   }catch(err){
-    console.warn('Falha ao ler Sheets, usando demo:', err);
+    console.warn('Falha ao ler Sheets (volumes), usando demo:', err);
     loadDemo(); state.demo=true; banner(true);
+  }
+  // Produtividade (planilha de tracking) — independente; se falhar, mantém demo dessa parte
+  try{
+    const [desc, car] = await Promise.all([
+      fetchCsv(CONFIG.SHEET_DESCARGA, trackingId()),
+      fetchCsv(CONFIG.SHEET_CARREGAMENTO, trackingId()),
+    ]);
+    if((!desc||desc.length<2) && (!car||car.length<2)) throw new Error('vazio');
+    parseDescarga(desc||[]); parseCarregamento(car||[]);
+  }catch(err){
+    console.warn('Falha ao ler Sheets (produtividade), usando demo:', err);
+    if(!state.demo){ banner(true); }
+    loadDemoProd();
   }
   buildDerived();
   populateFilters();
@@ -399,25 +490,55 @@ function parseAging(rows){
              date:d, ym:d?ymKey(d):'', dias:parseNum(r[iDias]) };
   }).filter(x=>x.cliente!=='?' || x.id);
 }
+function parseDescarga(rows){
+  if(!rows||rows.length<2){ state.descarga=[]; return; }
+  const h=rows[0];
+  const iC=findCol(h,'Operação (Cliente)','Operação','Operacao','Cliente'),
+        iD=findCol(h,'Data Chegada','Data_Chegada','DataChegada','Data'),
+        iP=findCol(h,'Produtividade');
+  state.descarga = rows.slice(1).map(r=>{
+    const d=parseDate(r[iD]);
+    const cli=(r[iC]||'').toString().trim().toUpperCase();
+    if(!cli) return null;
+    return { cliente:cli, date:d, ym:d?ymKey(d):'', prod:parseNum(r[iP]) };
+  }).filter(Boolean);
+}
+function parseCarregamento(rows){
+  if(!rows||rows.length<2){ state.carregamento=[]; return; }
+  const h=rows[0];
+  const iR=findCol(h,'Rota'),
+        iD=findCol(h,'Data Chegada','Data_Chegada','DataChegada','Data'),
+        iP=findCol(h,'Produtividade');
+  state.carregamento = rows.slice(1).map(r=>{
+    const d=parseDate(r[iD]);
+    const rota=(r[iR]||'').toString().trim();
+    if(!rota) return null;
+    return { rota:rota, date:d, ym:d?ymKey(d):'', prod:parseNum(r[iP]) };
+  }).filter(Boolean);
+}
 function buildDerived(){
-  const cli=new Set(), anos=new Set();
+  const cli=new Set(), rot=new Set(), anos=new Set();
   state.agregado.forEach(r=>{cli.add(r.cliente); anos.add(r.date.getFullYear());});
   state.aging.forEach(r=>{cli.add(r.cliente); if(r.date) anos.add(r.date.getFullYear());});
+  state.descarga.forEach(r=>{cli.add(r.cliente); if(r.date) anos.add(r.date.getFullYear());});
+  state.carregamento.forEach(r=>{rot.add(r.rota); if(r.date) anos.add(r.date.getFullYear());});
   state.clientes=[...cli].sort();
+  state.rotas=[...rot].sort();
   state.anos=[...anos].sort((a,b)=>b-a);
 }
 
 /* ================= FILTROS ================= */
 function populateFilters(){
-  const fc=document.getElementById('fCliente'), fa=document.getElementById('fAno'), fm=document.getElementById('fMes');
+  const fc=document.getElementById('fCliente'), fa=document.getElementById('fAno'),
+        fm=document.getElementById('fMes'), fr=document.getElementById('fRota');
   fc.innerHTML='<option value="TODOS">Todos</option>'+state.clientes.map(c=>`<option>${c}</option>`).join('');
+  fr.innerHTML='<option value="TODOS">Todas</option>'+state.rotas.map(r=>`<option>${r}</option>`).join('');
   fa.innerHTML='<option value="TODOS">Todos</option>'+state.anos.map(a=>`<option>${a}</option>`).join('');
   fm.innerHTML='<option value="TODOS">Todos</option>'+MESES.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
-  fc.value=state.filtro.cliente; fa.value=state.filtro.ano; fm.value=state.filtro.mes;
+  fc.value=state.filtro.cliente; fr.value=state.filtro.rota; fa.value=state.filtro.ano; fm.value=state.filtro.mes;
 }
-function matchFiltro(r){
+function matchDate(r){
   const f=state.filtro;
-  if(f.cliente!=='TODOS' && r.cliente!==f.cliente) return false;
   if(!r.date) return f.ano==='TODOS' && f.mes==='TODOS' && !f.de && !f.ate;
   const t=r.date.getTime();
   if(f.de){ const d=parseDate(f.de); if(d && t < d.getTime()) return false; }
@@ -426,10 +547,13 @@ function matchFiltro(r){
   if(f.mes!=='TODOS' && (r.date.getMonth()+1)!=+f.mes) return false;
   return true;
 }
+function matchFiltro(r){ return (state.filtro.cliente==='TODOS'||r.cliente===state.filtro.cliente) && matchDate(r); }
+function matchFiltroRota(r){ return (state.filtro.rota==='TODOS'||r.rota===state.filtro.rota) && matchDate(r); }
 const filtAgregado=()=> state.agregado.filter(matchFiltro);
 const filtAging=()=> state.aging.filter(matchFiltro);
+const filtDescarga=()=> state.descarga.filter(matchFiltro);
+const filtCarreg=()=> state.carregamento.filter(matchFiltroRota);
 function clientesParaRenderizar(){
-  if(state.tv.on) return [ state.clientes[state.tv.idx % Math.max(1,state.clientes.length)] ].filter(Boolean);
   if(state.filtro.cliente!=='TODOS') return [state.filtro.cliente];
   return state.clientes.length? state.clientes : ['—'];
 }
@@ -437,13 +561,26 @@ function clientesParaRenderizar(){
 /* ================= RENDER ================= */
 function clearCharts(){ state.charts.forEach(c=>{try{c.destroy()}catch(e){}}); state.charts=[]; }
 
+function syncViewUI(){
+  document.body.classList.toggle('view-prod', state.view==='prod');
+  document.getElementById('viewVolumes').hidden = state.view!=='volumes';
+  document.getElementById('viewProd').hidden = state.view!=='prod';
+  document.querySelectorAll('.navitem').forEach(b=> b.classList.toggle('on', b.dataset.view===state.view));
+  document.getElementById('subTitle').textContent = state.view==='prod'
+    ? 'Torre de Controle · Produtividade' : 'Torre de Controle · Cross Docking Diadema';
+}
+
 function render(){
   clearCharts();
-  document.getElementById('volDesc').textContent =
-    'entrada × saída por ' + (state.filtro.periodo==='MES' ? 'mês' : 'dia');
-  renderKpis();
-  renderVolume();
-  renderAging();
+  syncViewUI();
+  if(state.tv.on){ renderTV(); renderTvBar(); return; }
+  if(state.view==='prod'){
+    renderProdKpis(); renderDescarga(); renderCarregamento();
+  }else{
+    const per = state.filtro.periodo==='MES' ? 'mês' : 'dia';
+    document.getElementById('volDesc').textContent = 'entrada × saída por '+per;
+    renderKpis(); renderVolume(); renderAging();
+  }
   renderTvBar();
 }
 
@@ -470,89 +607,187 @@ function renderKpis(){
     </div>`).join('');
 }
 
+function computeVolumeSeries(cli){
+  const rows=filtAgregado().filter(r=>cli==='—'||r.cliente===cli);
+  const porMes = state.filtro.periodo==='MES';
+  const map=new Map();
+  rows.forEach(r=>{const k=porMes?ymKey(r.date):r.date.getTime();
+    if(!map.has(k))map.set(k,{e:0,s:0,d:r.date}); const o=map.get(k); o.e+=r.entrada; o.s+=r.saida;});
+  const entries=[...map.entries()].sort((a,b)=> porMes ? (a[0]<b[0]?-1:1) : (a[0]-b[0]));
+  const labels=[],ent=[],sai=[];
+  entries.forEach(([k,o])=>{ labels.push(porMes?MESES[o.d.getMonth()]+'/'+String(o.d.getFullYear()).slice(2):fmtDate(o.d)); ent.push(o.e); sai.push(o.s); });
+  return {labels,ent,sai,totalE:ent.reduce((a,b)=>a+b,0),totalS:sai.reduce((a,b)=>a+b,0)};
+}
+function makeVolumeChart(canvas, s){
+  const sz=barSizing(s.labels.length);
+  const ch=new Chart(canvas,{type:'bar',data:{labels:s.labels,datasets:[
+      {label:'Entrada',data:s.ent,backgroundColor:'rgba(53,214,208,.85)',borderRadius:4,maxBarThickness:sz.thick,categoryPercentage:sz.cat,barPercentage:sz.bar},
+      {label:'Saída',data:s.sai,backgroundColor:'rgba(63,208,127,.85)',borderRadius:4,maxBarThickness:sz.thick,categoryPercentage:sz.cat,barPercentage:sz.bar},
+    ]}, options:volumeOpts()});
+  state.charts.push(ch); return ch;
+}
+function volumeCard(cli){
+  const s=computeVolumeSeries(cli);
+  const card=document.createElement('div');
+  card.className='card'; card.style.setProperty('--c', corCliente(cli));
+  card.innerHTML=`
+    <div class="head">
+      <div class="who">${cli}</div>
+      <div class="mini">
+        <span>Entrada<b class="num">${fmtNum(s.totalE)}</b></span>
+        <span>Saída<b class="num">${fmtNum(s.totalS)}</b></span>
+      </div>
+    </div>
+    <div class="chartbox"><canvas></canvas></div>
+    <div class="legend"><span><i style="background:var(--cyan)"></i>Entrada</span><span><i style="background:var(--green)"></i>Saída</span></div>`;
+  if(!s.labels.length){ card.querySelector('.chartbox').innerHTML='<div class="empty">Sem dados no filtro atual</div>'; return card; }
+  requestAnimationFrame(()=> makeVolumeChart(card.querySelector('canvas'), s));
+  return card;
+}
 function renderVolume(){
   const grid=document.getElementById('volGrid'); grid.innerHTML='';
-  const clientes=clientesParaRenderizar();
-  const porMes = state.filtro.periodo==='MES';
-
-  clientes.forEach(cli=>{
-    const rows=filtAgregado().filter(r=>cli==='—'||r.cliente===cli);
-    let labels=[], ent=[], sai=[];
-    if(porMes){
-      const map=new Map();
-      rows.forEach(r=>{const k=ymKey(r.date); if(!map.has(k))map.set(k,{e:0,s:0,d:r.date}); const o=map.get(k); o.e+=r.entrada; o.s+=r.saida;});
-      [...map.entries()].sort((a,b)=>a[0]<b[0]?-1:1).forEach(([k,o])=>{labels.push(MESES[o.d.getMonth()]+'/'+String(o.d.getFullYear()).slice(2)); ent.push(o.e); sai.push(o.s);});
-    }else{
-      const map=new Map();
-      rows.forEach(r=>{const k=r.date.getTime(); if(!map.has(k))map.set(k,{e:0,s:0,d:r.date}); const o=map.get(k); o.e+=r.entrada; o.s+=r.saida;});
-      [...map.entries()].sort((a,b)=>a[0]-b[0]).forEach(([k,o])=>{labels.push(fmtDate(o.d)); ent.push(o.e); sai.push(o.s);});
-    }
-    const totalE=ent.reduce((a,b)=>a+b,0), totalS=sai.reduce((a,b)=>a+b,0);
-    const card=document.createElement('div');
-    card.className='card'; card.style.setProperty('--c', corCliente(cli));
-    card.innerHTML=`
-      <div class="head">
-        <div class="who">${cli}</div>
-        <div class="mini">
-          <span>Entrada<b class="num">${fmtNum(totalE)}</b></span>
-          <span>Saída<b class="num">${fmtNum(totalS)}</b></span>
-        </div>
-      </div>
-      <div class="chartbox"><canvas></canvas></div>
-      <div class="legend"><span><i style="background:var(--cyan)"></i>Entrada</span><span><i style="background:var(--green)"></i>Saída</span></div>`;
-    grid.appendChild(card);
-    if(!labels.length){ card.querySelector('.chartbox').innerHTML='<div class="empty">Sem dados no filtro atual</div>'; return; }
-
-    const ctx=card.querySelector('canvas');
-    const sz=barSizing(labels.length);
-    const ch=new Chart(ctx,{type:'bar',data:{labels,datasets:[
-        {label:'Entrada',data:ent,backgroundColor:'rgba(53,214,208,.85)',borderRadius:4,maxBarThickness:sz.thick,categoryPercentage:sz.cat,barPercentage:sz.bar},
-        {label:'Saída',data:sai,backgroundColor:'rgba(63,208,127,.85)',borderRadius:4,maxBarThickness:sz.thick,categoryPercentage:sz.cat,barPercentage:sz.bar},
-      ]}, options:volumeOpts()});
-    state.charts.push(ch);
-  });
+  clientesParaRenderizar().forEach(cli=> grid.appendChild(volumeCard(cli)));
 }
 
+function makeAgingChart(canvas, cli, zero, pos){
+  const ch=new Chart(canvas,{type:'bar',data:{
+      labels:['0 dias','+0 dias'],
+      datasets:[{data:[zero.length,pos.length],
+        backgroundColor:['rgba(255,176,32,.9)','rgba(255,91,82,.9)'],
+        borderRadius:6,maxBarThickness:90}]},
+    options:{...baseChartOpts(), plugins:{legend:{display:false},tooltip:tooltipCfg(),
+      datalabels:{ display:()=>state.showLabels, anchor:'end', align:'top', offset:2, clamp:false, clip:false,
+        color:(ctx)=> ctx.dataIndex===0 ? '#ffb020' : '#ff5b52',
+        font:{family:'Barlow Semi Condensed', weight:'800', size:16},
+        formatter:(v)=> fmtNum(v) } },
+      onClick:(e,els)=>{ if(!els.length) return; const i=els[0].index;
+        openAgingModal(cli, i===0?'0':'+0', i===0?zero:pos); },
+      onHover:(e,els)=>{ e.native.target.style.cursor = els.length?'pointer':'default'; }
+    }});
+  state.charts.push(ch); return ch;
+}
+function agingCard(cli){
+  const rows=filtAging().filter(r=>cli==='—'||r.cliente===cli);
+  const zero=rows.filter(r=>r.dias===0), pos=rows.filter(r=>r.dias>0);
+  const card=document.createElement('div');
+  card.className='card'; card.style.setProperty('--c', corCliente(cli));
+  card.innerHTML=`
+    <div class="head">
+      <div class="who">${cli}</div>
+      <div class="mini">
+        <span>0 dias<b class="num" style="color:var(--amber)">${fmtNum(zero.length)}</b></span>
+        <span>+0 dias<b class="num" style="color:var(--red)">${fmtNum(pos.length)}</b></span>
+      </div>
+    </div>
+    <div class="chartbox small"><canvas></canvas></div>
+    <div class="hint">Clique numa barra para listar os itens e exportar.</div>`;
+  if(!rows.length){ card.querySelector('.chartbox').innerHTML='<div class="empty">Sem itens em aging</div>'; return card; }
+  requestAnimationFrame(()=> makeAgingChart(card.querySelector('canvas'), cli, zero, pos));
+  return card;
+}
 function renderAging(){
   const grid=document.getElementById('ageGrid'); grid.innerHTML='';
-  const clientes=clientesParaRenderizar();
+  clientesParaRenderizar().forEach(cli=> grid.appendChild(agingCard(cli)));
+}
 
-  clientes.forEach(cli=>{
-    const rows=filtAging().filter(r=>cli==='—'||r.cliente===cli);
-    const zero=rows.filter(r=>r.dias===0);
-    const pos =rows.filter(r=>r.dias>0);
-    const card=document.createElement('div');
-    card.className='card'; card.style.setProperty('--c', corCliente(cli));
-    card.innerHTML=`
-      <div class="head">
-        <div class="who">${cli}</div>
-        <div class="mini">
-          <span>0 dias<b class="num" style="color:var(--amber)">${fmtNum(zero.length)}</b></span>
-          <span>+0 dias<b class="num" style="color:var(--red)">${fmtNum(pos.length)}</b></span>
-        </div>
-      </div>
-      <div class="chartbox small"><canvas></canvas></div>
-      <div class="hint">Clique numa barra para listar os itens e exportar.</div>`;
-    grid.appendChild(card);
-    if(!rows.length){ card.querySelector('.chartbox').innerHTML='<div class="empty">Sem itens em aging</div>'; return; }
-
-    const ctx=card.querySelector('canvas');
-    const ch=new Chart(ctx,{type:'bar',data:{
-        labels:['0 dias','+0 dias'],
-        datasets:[{data:[zero.length,pos.length],
-          backgroundColor:['rgba(255,176,32,.9)','rgba(255,91,82,.9)'],
-          borderRadius:6,maxBarThickness:80}]},
-      options:{...baseChartOpts(), plugins:{legend:{display:false},tooltip:tooltipCfg(),
-        datalabels:{ display:()=>state.showLabels, anchor:'end', align:'top', offset:2, clamp:false, clip:false,
-          color:(ctx)=> ctx.dataIndex===0 ? '#ffb020' : '#ff5b52',
-          font:{family:'Barlow Semi Condensed', weight:'800', size:16},
-          formatter:(v)=> fmtNum(v) } },
-        onClick:(e,els)=>{ if(!els.length) return; const i=els[0].index;
-          openAgingModal(cli, i===0?'0':'+0', i===0?zero:pos); },
-        onHover:(e,els)=>{ e.native.target.style.cursor = els.length?'pointer':'default'; }
-      }});
-    state.charts.push(ch);
+/* ================= PRODUTIVIDADE ================= */
+function sumByEntity(rows, key){
+  const m=new Map();
+  rows.forEach(r=>{ const k=r[key]; m.set(k,(m.get(k)||0)+r.prod); });
+  return [...m.entries()].sort((a,b)=>b[1]-a[1]); // [ [nome, soma], ... ] desc
+}
+function sumByPeriod(rows){
+  const porMes = state.filtro.periodo==='MES';
+  const m=new Map();
+  rows.forEach(r=>{ if(!r.date) return; const k=porMes?ymKey(r.date):r.date.getTime();
+    if(!m.has(k)) m.set(k,{v:0,d:r.date}); m.get(k).v+=r.prod; });
+  const entries=[...m.entries()].sort((a,b)=> porMes ? (a[0]<b[0]?-1:1) : (a[0]-b[0]));
+  const labels=[],data=[];
+  entries.forEach(([k,o])=>{ labels.push(porMes?MESES[o.d.getMonth()]+'/'+String(o.d.getFullYear()).slice(2):fmtDate(o.d)); data.push(o.v); });
+  return {labels,data};
+}
+function makeEntityChart(canvas, pairs, colorFn){
+  const labels=pairs.map(p=>p[0]), data=pairs.map(p=>p[1]);
+  const sz=barSizing(labels.length);
+  const colors=pairs.map((p,i)=> colorFn(p[0], i));
+  const ch=new Chart(canvas,{type:'bar',data:{labels,datasets:[
+      {data,backgroundColor:colors,borderRadius:5,maxBarThickness:sz.thick,categoryPercentage:Math.max(sz.cat,0.55),barPercentage:0.9}]},
+    options:volumeOpts()});
+  state.charts.push(ch); return ch;
+}
+function makePeriodChart(canvas, labels, data, color){
+  const sz=barSizing(labels.length);
+  const ch=new Chart(canvas,{type:'bar',data:{labels,datasets:[
+      {data,backgroundColor:color,borderRadius:4,maxBarThickness:sz.thick,categoryPercentage:sz.cat,barPercentage:sz.bar}]},
+    options:volumeOpts()});
+  state.charts.push(ch); return ch;
+}
+function prodCard(title, sub, chartClass, buildFn, emptyMsg){
+  const card=document.createElement('div');
+  card.className='card'; card.style.setProperty('--c', chartClass.color);
+  card.innerHTML=`
+    <div class="head"><div class="who">${title}</div>
+      <div class="mini"><span>${sub.label}<b class="num" style="color:${chartClass.color}">${sub.value}</b></span></div>
+    </div>
+    <div class="chartbox ${chartClass.small?'small':''}"><canvas></canvas></div>`;
+  requestAnimationFrame(()=>{
+    const has=buildFn(card.querySelector('canvas'));
+    if(!has) card.querySelector('.chartbox').innerHTML=`<div class="empty">${emptyMsg}</div>`;
   });
+  return card;
+}
+function renderProdKpis(){
+  const d=filtDescarga(), c=filtCarreg();
+  const sd=d.reduce((s,r)=>s+r.prod,0), sc=c.reduce((s,r)=>s+r.prod,0);
+  const escC = state.filtro.cliente==='TODOS'?'todos os clientes':state.filtro.cliente;
+  const escR = state.filtro.rota==='TODOS'?'todas as rotas':state.filtro.rota;
+  const K=[
+    {c:'var(--cyan)',  lbl:'Produtividade descarga',    v:fmtNum(sd), sub:'soma · coluna Produtividade'},
+    {c:'var(--blue)',  lbl:'Operações descarga',        v:fmtNum(d.length), sub:escC},
+    {c:'var(--green)', lbl:'Produtividade carregamento', v:fmtNum(sc), sub:'soma · coluna Produtividade'},
+    {c:'var(--violet)',lbl:'Operações carregamento',    v:fmtNum(c.length), sub:escR},
+    {c:'var(--amber)', lbl:'Produtividade total',       v:fmtNum(sd+sc), sub:'descarga + carregamento'},
+  ];
+  document.getElementById('kpisProd').innerHTML = K.map(k=>`
+    <div class="kpi" style="--c:${k.c}">
+      <div class="lbl">${k.lbl}</div><div class="v num">${k.v}</div><div class="sub">${k.sub}</div>
+    </div>`).join('');
+}
+function renderDescarga(){
+  const grid=document.getElementById('descGrid'); grid.innerHTML='';
+  const rows=filtDescarga();
+  const total=rows.reduce((s,r)=>s+r.prod,0);
+  document.getElementById('descDesc').textContent =
+    'produtividade por cliente · e por '+(state.filtro.periodo==='MES'?'mês':'dia');
+  // por cliente
+  grid.appendChild(prodCard('Por cliente', {label:'Total',value:fmtNum(total)},
+    {color:'var(--cyan)'},
+    (cv)=>{ const pairs=sumByEntity(rows,'cliente'); if(!pairs.length) return false;
+      makeEntityChart(cv, pairs, (name)=>corClienteHex(name)); return true; },
+    'Sem dados de descarga no filtro'));
+  // por período
+  grid.appendChild(prodCard('Por período', {label:'Total',value:fmtNum(total)},
+    {color:'var(--cyan)'},
+    (cv)=>{ const p=sumByPeriod(rows); if(!p.labels.length) return false;
+      makePeriodChart(cv, p.labels, p.data, 'rgba(53,214,208,.85)'); return true; },
+    'Sem dados de descarga no filtro'));
+}
+function renderCarregamento(){
+  const grid=document.getElementById('carGrid'); grid.innerHTML='';
+  const rows=filtCarreg();
+  const total=rows.reduce((s,r)=>s+r.prod,0);
+  document.getElementById('carDesc').textContent =
+    'produtividade por rota · e por '+(state.filtro.periodo==='MES'?'mês':'dia');
+  grid.appendChild(prodCard('Por rota', {label:'Total',value:fmtNum(total)},
+    {color:'var(--green)'},
+    (cv)=>{ const pairs=sumByEntity(rows,'rota'); if(!pairs.length) return false;
+      makeEntityChart(cv, pairs, (name,i)=>corRota(name,i)); return true; },
+    'Sem dados de carregamento no filtro'));
+  grid.appendChild(prodCard('Por período', {label:'Total',value:fmtNum(total)},
+    {color:'var(--green)'},
+    (cv)=>{ const p=sumByPeriod(rows); if(!p.labels.length) return false;
+      makePeriodChart(cv, p.labels, p.data, 'rgba(63,208,127,.85)'); return true; },
+    'Sem dados de carregamento no filtro'));
 }
 
 function baseChartOpts(){
@@ -623,12 +858,37 @@ function exportXlsx(){
 }
 
 /* ================= TV MODE ================= */
+function renderTV(){
+  const stage=document.getElementById('tvStage'); stage.innerHTML='';
+  const grid=document.createElement('div'); grid.className='tvgrid'; stage.appendChild(grid);
+
+  if(state.view==='prod'){
+    const d=filtDescarga(), c=filtCarreg();
+    grid.appendChild(prodCard('Descarga · por cliente',
+      {label:'Total', value:fmtNum(d.reduce((s,r)=>s+r.prod,0))}, {color:'var(--cyan)'},
+      (cv)=>{ const p=sumByEntity(d,'cliente'); if(!p.length) return false; makeEntityChart(cv,p,(n)=>corClienteHex(n)); return true; },
+      'Sem dados de descarga'));
+    grid.appendChild(prodCard('Carregamento · por rota',
+      {label:'Total', value:fmtNum(c.reduce((s,r)=>s+r.prod,0))}, {color:'var(--green)'},
+      (cv)=>{ const p=sumByEntity(c,'rota'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corRota(n,i)); return true; },
+      'Sem dados de carregamento'));
+  }else{
+    const cli = state.filtro.cliente!=='TODOS' ? state.filtro.cliente
+      : (state.clientes[state.tv.idx % Math.max(1,state.clientes.length)] || '—');
+    grid.appendChild(volumeCard(cli));
+    grid.appendChild(agingCard(cli));
+  }
+}
 function renderTvBar(){
-  const bar=document.getElementById('tvbar');
-  if(!state.tv.on || state.clientes.length<=1){ document.getElementById('tvSpot').textContent=''; document.getElementById('tvDots').innerHTML=''; return; }
-  const cur=state.clientes[state.tv.idx % state.clientes.length];
-  document.getElementById('tvSpot').textContent = 'EM FOCO · '+cur;
-  document.getElementById('tvDots').innerHTML = state.clientes.map((c,i)=>`<i class="${i===state.tv.idx%state.clientes.length?'on':''}"></i>`).join('');
+  const spot=document.getElementById('tvSpot'), dots=document.getElementById('tvDots');
+  if(!state.tv.on){ spot.textContent=''; dots.innerHTML=''; return; }
+  if(state.view==='prod'){ spot.textContent='PRODUTIVIDADE'; dots.innerHTML=''; return; }
+  if(state.filtro.cliente!=='TODOS' || state.clientes.length<=1){
+    spot.textContent = 'EM FOCO · '+(state.filtro.cliente!=='TODOS'?state.filtro.cliente:(state.clientes[0]||'')); dots.innerHTML=''; return;
+  }
+  const i=state.tv.idx % state.clientes.length;
+  spot.textContent = 'EM FOCO · '+state.clientes[i];
+  dots.innerHTML = state.clientes.map((c,k)=>`<i class="${k===i?'on':''}"></i>`).join('');
 }
 function toggleTv(){
   state.tv.on=!state.tv.on;
@@ -674,6 +934,24 @@ function loadDemo(){
     ...mkAge('GM','GM-EXP-',5,4,'2026-08-07'),
   ];
 }
+function loadDemoProd(){
+  const D=[
+    ['EATON','2026-08-11',480],['GM','2026-08-11',300],
+    ['EATON','2026-08-12',520],['GM','2026-08-12',360],
+    ['EATON','2026-08-13',610],['GM','2026-08-13',290],
+    ['EATON','2026-08-14',540],['GM','2026-08-14',410],
+    ['EATON','2026-07-20',500],['GM','2026-07-20',350],
+  ];
+  state.descarga = D.map(([c,dt,p])=>{const d=parseDate(dt);return{cliente:c,date:d,ym:ymKey(d),prod:p};});
+  const C=[
+    ['ROTA SP CAPITAL','2026-08-11',500],['ROTA ABC','2026-08-11',420],['ROTA INTERIOR','2026-08-11',380],
+    ['ROTA SP CAPITAL','2026-08-12',560],['ROTA ABC','2026-08-12',300],['ROTA INTERIOR','2026-08-12',450],
+    ['ROTA SP CAPITAL','2026-08-13',610],['ROTA ABC','2026-08-13',390],['ROTA INTERIOR','2026-08-13',410],
+    ['ROTA SP CAPITAL','2026-08-14',530],['ROTA ABC','2026-08-14',360],['ROTA INTERIOR','2026-08-14',470],
+    ['ROTA SP CAPITAL','2026-07-22',480],['ROTA ABC','2026-07-22',330],
+  ];
+  state.carregamento = C.map(([r,dt,p])=>{const d=parseDate(dt);return{rota:r,date:d,ym:ymKey(d),prod:p};});
+}
 
 /* ================= UTIL/EVENTOS ================= */
 const pad=(n)=>String(n).padStart(2,'0');
@@ -692,10 +970,15 @@ function resetAnoMes(){ state.filtro.ano='TODOS'; state.filtro.mes='TODOS';
   document.getElementById('fAno').value='TODOS'; document.getElementById('fMes').value='TODOS'; }
 
 document.getElementById('fCliente').addEventListener('change',e=>{state.filtro.cliente=e.target.value; render();});
+document.getElementById('fRota').addEventListener('change',e=>{state.filtro.rota=e.target.value; render();});
 document.getElementById('fAno').addEventListener('change',e=>{state.filtro.ano=e.target.value; clearRange(); render();});
 document.getElementById('fMes').addEventListener('change',e=>{state.filtro.mes=e.target.value; clearRange(); render();});
 $de.addEventListener('change',e=>{ state.filtro.de=e.target.value; resetAnoMes(); render(); });
 $ate.addEventListener('change',e=>{ state.filtro.ate=e.target.value; resetAnoMes(); render(); });
+
+document.querySelectorAll('.navitem').forEach(b=> b.addEventListener('click',()=>{
+  state.view=b.dataset.view; render();
+}));
 
 document.getElementById('btnLabels').addEventListener('click',e=>{
   state.showLabels=!state.showLabels;
@@ -703,7 +986,7 @@ document.getElementById('btnLabels').addEventListener('click',e=>{
   render();
 });
 document.getElementById('btnHoje').addEventListener('click',()=>{
-  state.filtro={cliente:'TODOS',ano:'TODOS',mes:'TODOS',periodo:state.filtro.periodo,de:'',ate:''};
+  state.filtro={cliente:'TODOS',rota:'TODOS',ano:'TODOS',mes:'TODOS',periodo:state.filtro.periodo,de:'',ate:''};
   $de.value=''; $ate.value='';
   populateFilters(); render();
 });
