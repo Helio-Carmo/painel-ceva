@@ -372,6 +372,11 @@ const CONFIG = {
   SHEET_DESCARGA: 'Base Descarga',
   SHEET_CARREGAMENTO: 'Base Carregamento',
 
+  // Como agregar a produtividade:
+  //  'linha_somada' = Vol_somado / (Horas_somadas × Pessoas_somadas)  ← igual à sua "linha somada"
+  //  'pessoa_hora'  = Vol_somado / Σ(Horas × Pessoas)                  ← média ponderada por hora-pessoa
+  PROD_CALC: 'linha_somada',
+
   REFRESH_MS: 5 * 60 * 1000,   // recarrega dados a cada 5 min
   TV_ROTATE_MS: 14 * 1000,     // troca o cliente em foco no modo TV a cada 14s
 };
@@ -430,6 +435,7 @@ function parseDate(v){
 }
 const fmtDate=(d)=> d? `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}` : '';
 const fmtNum=(n)=> Math.round(n).toLocaleString('pt-BR');
+const fmtDec=(n)=> (Math.round(n*10)/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
 const ymKey=(d)=> `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 
 /* ================= LOAD ================= */
@@ -494,30 +500,72 @@ function parseAging(rows){
              date:d, ym:d?ymKey(d):'', dias:parseNum(r[iDias]) };
   }).filter(x=>x.cliente!=='?' || x.id);
 }
+// acha a linha de cabeçalho (planilhas têm linha de título "Descarga"/"Carregamento" antes)
+function findHeaderRow(rows){
+  const keys=['qtdvol','datachegada','inicioreal','terminoreal','qtdpessoas','operacao','rota','produtividade'];
+  let best=0,bestScore=-1;
+  for(let i=0;i<Math.min(rows.length,12);i++){
+    const H=(rows[i]||[]).map(norm);
+    const score=keys.reduce((s,k)=> s + (H.some(h=>h.includes(k))?1:0), 0);
+    if(score>bestScore){bestScore=score;best=i;}
+  }
+  return best;
+}
+// tempo -> fração do dia (aceita "23:30", "1:50:00", Date(...) ou decimal)
+function parseTimeFrac(v){
+  if(v==null) return null;
+  const s=(''+v).trim(); if(!s) return null;
+  let m=s.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+)(?:,(\d+))?\)/);
+  if(m){ return (+m[4]*3600 + +m[5]*60 + (+m[6]||0))/86400; }
+  m=s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if(m){ return (+m[1]*3600 + +m[2]*60 + (+m[3]||0))/86400; }
+  const num=parseFloat(s.replace(',','.'));
+  if(!isNaN(num) && num>=0 && num<2) return num%1;
+  return null;
+}
+// duração em horas entre início (K) e término (L), tratando virada de meia-noite (MOD(L-K;1))
+function durHoras(kFrac,lFrac){
+  if(kFrac==null||lFrac==null) return null;
+  let d=(lFrac-kFrac)%1; if(d<0) d+=1; return d*24;
+}
+// monta uma linha de produtividade só se passar no mesmo guardião da fórmula (F, K, L preenchidos e M>0)
+function linhaProd(r, iVol,iIni,iFim,iPes,dim,date){
+  const volTxt=(r[iVol]??'').toString().trim();
+  const iniF=parseTimeFrac(r[iIni]), fimF=parseTimeFrac(r[iFim]);
+  const pes=parseNum(r[iPes]);
+  if(volTxt==='' || iniF==null || fimF==null || pes<=0) return null;
+  const h=durHoras(iniF,fimF);
+  if(h==null || h<=0) return null;               // evita divisão por zero
+  return { date, ym:date?ymKey(date):'', vol:parseNum(volTxt), hours:h, pessoas:pes, dim };
+}
 function parseDescarga(rows){
   if(!rows||rows.length<2){ state.descarga=[]; return; }
-  const h=rows[0];
+  const hr=findHeaderRow(rows), h=rows[hr];
   const iC=findCol(h,'Operação (Cliente)','Operação','Operacao','Cliente'),
         iD=findCol(h,'Data Chegada','Data_Chegada','DataChegada','Data'),
-        iP=findCol(h,'Produtividade');
-  state.descarga = rows.slice(1).map(r=>{
-    const d=parseDate(r[iD]);
-    const cli=(r[iC]||'').toString().trim().toUpperCase();
-    if(!cli) return null;
-    return { cliente:cli, date:d, ym:d?ymKey(d):'', prod:parseNum(r[iP]) };
+        iVol=findCol(h,'Qtd Vol.','Qtd Vol','Qtd. Vol','Volume'),
+        iIni=findCol(h,'Inicio Real','Início Real','InicioReal'),
+        iFim=findCol(h,'Termino Real','Término Real','TerminoReal'),
+        iPes=findCol(h,'Qtd. Pessoas','Qtd Pessoas','Pessoas');
+  state.descarga = rows.slice(hr+1).map(r=>{
+    const cli=(r[iC]||'').toString().trim().toUpperCase(); if(!cli) return null;
+    const l=linhaProd(r,iVol,iIni,iFim,iPes,cli,parseDate(r[iD]));
+    return l ? {cliente:cli, date:l.date, ym:l.ym, vol:l.vol, hours:l.hours, pessoas:l.pessoas} : null;
   }).filter(Boolean);
 }
 function parseCarregamento(rows){
   if(!rows||rows.length<2){ state.carregamento=[]; return; }
-  const h=rows[0];
+  const hr=findHeaderRow(rows), h=rows[hr];
   const iR=findCol(h,'Rota'),
         iD=findCol(h,'Data Chegada','Data_Chegada','DataChegada','Data'),
-        iP=findCol(h,'Produtividade');
-  state.carregamento = rows.slice(1).map(r=>{
-    const d=parseDate(r[iD]);
-    const rota=(r[iR]||'').toString().trim();
-    if(!rota) return null;
-    return { rota:rota, date:d, ym:d?ymKey(d):'', prod:parseNum(r[iP]) };
+        iVol=findCol(h,'Qtd Vol.','Qtd Vol','Qtd. Vol','Volume'),
+        iIni=findCol(h,'Inicio Real','Início Real','InicioReal'),
+        iFim=findCol(h,'Termino Real','Término Real','TerminoReal'),
+        iPes=findCol(h,'Qtd. Pessoas','Qtd Pessoas','Pessoas');
+  state.carregamento = rows.slice(hr+1).map(r=>{
+    const rota=(r[iR]||'').toString().trim(); if(!rota) return null;
+    const l=linhaProd(r,iVol,iIni,iFim,iPes,rota,parseDate(r[iD]));
+    return l ? {rota:rota, date:l.date, ym:l.ym, vol:l.vol, hours:l.hours, pessoas:l.pessoas} : null;
   }).filter(Boolean);
 }
 function buildDerived(){
@@ -707,20 +755,36 @@ function renderAging(){
 }
 
 /* ================= PRODUTIVIDADE ================= */
-function sumByEntity(rows, key){
-  const m=new Map();
-  rows.forEach(r=>{ const k=r[key]; m.set(k,(m.get(k)||0)+r.prod); });
-  return [...m.entries()].sort((a,b)=>b[1]-a[1]); // [ [nome, soma], ... ] desc
+// Produtividade de um conjunto de linhas = Vol_somado / (Horas_somadas × Pessoas_somadas)
+// (a "linha somada": soma volume, soma durações e soma pessoas, e aplica a fórmula)
+function prodValue(rows){
+  let vol=0,hrs=0,ppl=0,ph=0;
+  rows.forEach(r=>{ vol+=r.vol; hrs+=r.hours; ppl+=r.pessoas; ph+=r.hours*r.pessoas; });
+  const den = CONFIG.PROD_CALC==='pessoa_hora' ? ph : (hrs*ppl);
+  return den>0 ? vol/den : 0;
 }
-function sumByPeriod(rows){
+function prodByEntity(rows, key){
+  const m=new Map();
+  rows.forEach(r=>{ const k=r[key]; if(!m.has(k)) m.set(k,[]); m.get(k).push(r); });
+  return [...m.entries()].map(([k,rs])=>[k, prodValue(rs)]).sort((a,b)=>b[1]-a[1]);
+}
+function prodByPeriod(rows){
   const porMes = state.filtro.periodo==='MES';
   const m=new Map();
   rows.forEach(r=>{ if(!r.date) return; const k=porMes?ymKey(r.date):r.date.getTime();
-    if(!m.has(k)) m.set(k,{v:0,d:r.date}); m.get(k).v+=r.prod; });
+    if(!m.has(k)) m.set(k,{rows:[],d:r.date}); m.get(k).rows.push(r); });
   const entries=[...m.entries()].sort((a,b)=> porMes ? (a[0]<b[0]?-1:1) : (a[0]-b[0]));
   const labels=[],data=[];
-  entries.forEach(([k,o])=>{ labels.push(porMes?MESES[o.d.getMonth()]+'/'+String(o.d.getFullYear()).slice(2):fmtDate(o.d)); data.push(o.v); });
+  entries.forEach(([k,o])=>{ labels.push(porMes?MESES[o.d.getMonth()]+'/'+String(o.d.getFullYear()).slice(2):fmtDate(o.d)); data.push(prodValue(o.rows)); });
   return {labels,data};
+}
+// opções para gráficos de produtividade (rótulos/eixo com 1 casa decimal)
+function prodOpts(){
+  const o=volumeOpts();
+  o.plugins.datalabels.formatter=(v)=> fmtDec(v);
+  o.plugins.tooltip.callbacks={ label:(c)=>` ${fmtDec(c.parsed.y)}` };
+  o.scales.y.ticks.callback=(v)=> fmtDec(v);
+  return o;
 }
 function makeEntityChart(canvas, pairs, colorFn){
   const labels=pairs.map(p=>p[0]), data=pairs.map(p=>p[1]);
@@ -728,14 +792,14 @@ function makeEntityChart(canvas, pairs, colorFn){
   const colors=pairs.map((p,i)=> colorFn(p[0], i));
   const ch=new Chart(canvas,{type:'bar',data:{labels,datasets:[
       {data,backgroundColor:colors,borderRadius:5,maxBarThickness:sz.thick,categoryPercentage:Math.max(sz.cat,0.55),barPercentage:0.9}]},
-    options:volumeOpts()});
+    options:prodOpts()});
   state.charts.push(ch); return ch;
 }
 function makePeriodChart(canvas, labels, data, color){
   const sz=barSizing(labels.length);
   const ch=new Chart(canvas,{type:'bar',data:{labels,datasets:[
       {data,backgroundColor:color,borderRadius:4,maxBarThickness:sz.thick,categoryPercentage:sz.cat,barPercentage:sz.bar}]},
-    options:volumeOpts()});
+    options:prodOpts()});
   state.charts.push(ch); return ch;
 }
 function prodCard(title, sub, chartClass, buildFn, emptyMsg){
@@ -754,15 +818,15 @@ function prodCard(title, sub, chartClass, buildFn, emptyMsg){
 }
 function renderProdKpis(){
   const d=filtDescarga(), c=filtCarreg();
-  const sd=d.reduce((s,r)=>s+r.prod,0), sc=c.reduce((s,r)=>s+r.prod,0);
+  const pd=prodValue(d), pc=prodValue(c), pg=prodValue(d.concat(c));
   const escC = state.filtro.cliente==='TODOS'?'todos os clientes':state.filtro.cliente;
   const escR = state.filtro.rota==='TODOS'?'todas as rotas':state.filtro.rota;
   const K=[
-    {c:'var(--cyan)',  lbl:'Produtividade descarga',    v:fmtNum(sd), sub:'soma · coluna Produtividade'},
+    {c:'var(--cyan)',  lbl:'Produtividade descarga',    v:fmtDec(pd), sub:'vol ÷ (horas × pessoas)'},
     {c:'var(--blue)',  lbl:'Operações descarga',        v:fmtNum(d.length), sub:escC},
-    {c:'var(--green)', lbl:'Produtividade carregamento', v:fmtNum(sc), sub:'soma · coluna Produtividade'},
+    {c:'var(--green)', lbl:'Produtividade carregamento', v:fmtDec(pc), sub:'vol ÷ (horas × pessoas)'},
     {c:'var(--violet)',lbl:'Operações carregamento',    v:fmtNum(c.length), sub:escR},
-    {c:'var(--amber)', lbl:'Produtividade total',       v:fmtNum(sd+sc), sub:'descarga + carregamento'},
+    {c:'var(--amber)', lbl:'Produtividade geral',       v:fmtDec(pg), sub:'descarga + carregamento'},
   ];
   document.getElementById('kpisProd').innerHTML = K.map(k=>`
     <div class="kpi" style="--c:${k.c}">
@@ -772,36 +836,34 @@ function renderProdKpis(){
 function renderDescarga(){
   const grid=document.getElementById('descGrid'); grid.innerHTML='';
   const rows=filtDescarga();
-  const total=rows.reduce((s,r)=>s+r.prod,0);
+  const prod=fmtDec(prodValue(rows));
   document.getElementById('descDesc').textContent =
-    'produtividade por cliente · e por '+(state.filtro.periodo==='MES'?'mês':'dia');
-  // por cliente
-  grid.appendChild(prodCard('Por cliente', {label:'Total',value:fmtNum(total)},
+    'produtividade (vol ÷ horas × pessoas) por cliente · e por '+(state.filtro.periodo==='MES'?'mês':'dia');
+  grid.appendChild(prodCard('Por cliente', {label:'Produtividade',value:prod},
     {color:'var(--cyan)'},
-    (cv)=>{ const pairs=sumByEntity(rows,'cliente'); if(!pairs.length) return false;
+    (cv)=>{ const pairs=prodByEntity(rows,'cliente'); if(!pairs.length) return false;
       makeEntityChart(cv, pairs, (name)=>corClienteHex(name)); return true; },
     'Sem dados de descarga no filtro'));
-  // por período
-  grid.appendChild(prodCard('Por período', {label:'Total',value:fmtNum(total)},
+  grid.appendChild(prodCard('Por período', {label:'Produtividade',value:prod},
     {color:'var(--cyan)'},
-    (cv)=>{ const p=sumByPeriod(rows); if(!p.labels.length) return false;
+    (cv)=>{ const p=prodByPeriod(rows); if(!p.labels.length) return false;
       makePeriodChart(cv, p.labels, p.data, 'rgba(53,214,208,.85)'); return true; },
     'Sem dados de descarga no filtro'));
 }
 function renderCarregamento(){
   const grid=document.getElementById('carGrid'); grid.innerHTML='';
   const rows=filtCarreg();
-  const total=rows.reduce((s,r)=>s+r.prod,0);
+  const prod=fmtDec(prodValue(rows));
   document.getElementById('carDesc').textContent =
-    'produtividade por rota · e por '+(state.filtro.periodo==='MES'?'mês':'dia');
-  grid.appendChild(prodCard('Por rota', {label:'Total',value:fmtNum(total)},
+    'produtividade (vol ÷ horas × pessoas) por rota · e por '+(state.filtro.periodo==='MES'?'mês':'dia');
+  grid.appendChild(prodCard('Por rota', {label:'Produtividade',value:prod},
     {color:'var(--green)'},
-    (cv)=>{ const pairs=sumByEntity(rows,'rota'); if(!pairs.length) return false;
+    (cv)=>{ const pairs=prodByEntity(rows,'rota'); if(!pairs.length) return false;
       makeEntityChart(cv, pairs, (name,i)=>corRota(name,i)); return true; },
     'Sem dados de carregamento no filtro'));
-  grid.appendChild(prodCard('Por período', {label:'Total',value:fmtNum(total)},
+  grid.appendChild(prodCard('Por período', {label:'Produtividade',value:prod},
     {color:'var(--green)'},
-    (cv)=>{ const p=sumByPeriod(rows); if(!p.labels.length) return false;
+    (cv)=>{ const p=prodByPeriod(rows); if(!p.labels.length) return false;
       makePeriodChart(cv, p.labels, p.data, 'rgba(63,208,127,.85)'); return true; },
     'Sem dados de carregamento no filtro'));
 }
@@ -897,13 +959,12 @@ function tvVolumeKpis(cli){
 }
 function tvProdKpis(){
   const d=state.descarga.filter(matchDate), c=state.carregamento.filter(matchDate);
-  const sd=d.reduce((s,r)=>s+r.prod,0), sc=c.reduce((s,r)=>s+r.prod,0);
   return [
-    {c:'var(--cyan)',  lbl:'Prod. descarga',    v:fmtNum(sd)},
+    {c:'var(--cyan)',  lbl:'Prod. descarga',    v:fmtDec(prodValue(d))},
     {c:'var(--blue)',  lbl:'Operações descarga',v:fmtNum(d.length)},
-    {c:'var(--green)', lbl:'Prod. carregamento',v:fmtNum(sc)},
+    {c:'var(--green)', lbl:'Prod. carregamento',v:fmtDec(prodValue(c))},
     {c:'var(--violet)',lbl:'Operações carreg.',  v:fmtNum(c.length)},
-    {c:'var(--amber)', lbl:'Prod. total',       v:fmtNum(sd+sc)},
+    {c:'var(--amber)', lbl:'Prod. geral',       v:fmtDec(prodValue(d.concat(c)))},
   ];
 }
 function renderTV(){
@@ -921,12 +982,12 @@ function renderTV(){
   if(page.kind==='prod'){
     const d=state.descarga.filter(matchDate), c=state.carregamento.filter(matchDate);
     grid.appendChild(prodCard('Descarga · por cliente',
-      {label:'Total', value:fmtNum(d.reduce((s,r)=>s+r.prod,0))}, {color:'var(--cyan)'},
-      (cv)=>{ const p=sumByEntity(d,'cliente'); if(!p.length) return false; makeEntityChart(cv,p,(n)=>corClienteHex(n)); return true; },
+      {label:'Produtividade', value:fmtDec(prodValue(d))}, {color:'var(--cyan)'},
+      (cv)=>{ const p=prodByEntity(d,'cliente'); if(!p.length) return false; makeEntityChart(cv,p,(n)=>corClienteHex(n)); return true; },
       'Sem dados de descarga'));
     grid.appendChild(prodCard('Carregamento · por rota',
-      {label:'Total', value:fmtNum(c.reduce((s,r)=>s+r.prod,0))}, {color:'var(--green)'},
-      (cv)=>{ const p=sumByEntity(c,'rota'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corRota(n,i)); return true; },
+      {label:'Produtividade', value:fmtDec(prodValue(c))}, {color:'var(--green)'},
+      (cv)=>{ const p=prodByEntity(c,'rota'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corRota(n,i)); return true; },
       'Sem dados de carregamento'));
   }else{
     grid.appendChild(volumeCard(page.cliente));
@@ -986,22 +1047,22 @@ function loadDemo(){
   ];
 }
 function loadDemoProd(){
+  // [dimensão, data, vol, horas, pessoas]
   const D=[
-    ['EATON','2026-08-11',480],['GM','2026-08-11',300],
-    ['EATON','2026-08-12',520],['GM','2026-08-12',360],
-    ['EATON','2026-08-13',610],['GM','2026-08-13',290],
-    ['EATON','2026-08-14',540],['GM','2026-08-14',410],
-    ['EATON','2026-07-20',500],['GM','2026-07-20',350],
+    ['EATON','2026-08-11',744,6.25,6],['GM SOROCABA','2026-08-11',856,2.5,4],
+    ['EATON','2026-08-12',509,1.5,6],['GM SOROCABA','2026-08-12',228,1.5,3],
+    ['HYUNDAI MOBIS','2026-08-12',214,3.0,2],
+    ['EATON','2026-08-13',613,2.0,5],['GM SOROCABA','2026-08-13',365,1.333,5],
+    ['EATON','2026-07-20',400,1.8,4],['GM SOROCABA','2026-07-20',300,1.2,3],
   ];
-  state.descarga = D.map(([c,dt,p])=>{const d=parseDate(dt);return{cliente:c,date:d,ym:ymKey(d),prod:p};});
+  state.descarga = D.map(([c,dt,v,h,p])=>{const d=parseDate(dt);return{cliente:c,date:d,ym:ymKey(d),vol:v,hours:h,pessoas:p};});
   const C=[
-    ['ROTA SP CAPITAL','2026-08-11',500],['ROTA ABC','2026-08-11',420],['ROTA INTERIOR','2026-08-11',380],
-    ['ROTA SP CAPITAL','2026-08-12',560],['ROTA ABC','2026-08-12',300],['ROTA INTERIOR','2026-08-12',450],
-    ['ROTA SP CAPITAL','2026-08-13',610],['ROTA ABC','2026-08-13',390],['ROTA INTERIOR','2026-08-13',410],
-    ['ROTA SP CAPITAL','2026-08-14',530],['ROTA ABC','2026-08-14',360],['ROTA INTERIOR','2026-08-14',470],
-    ['ROTA SP CAPITAL','2026-07-22',480],['ROTA ABC','2026-07-22',330],
+    ['ROTA DIRETA MINAS','2026-08-11',415,5.0,5],['GM RJ','2026-08-11',85,2.083,1],
+    ['ROTA DIRETA GOINIA','2026-08-12',352,5.0,2],['ROTA DIRETA BRASILIA','2026-08-12',497,3.3,2],
+    ['ROTA DIRETA MINAS','2026-08-13',619,4.5,2],['DA - 05','2026-08-13',47,2.5,1],
+    ['ROTA DIRETA GOINIA','2026-07-22',359,2.5,2],['GM RJ','2026-07-22',120,2.0,1],
   ];
-  state.carregamento = C.map(([r,dt,p])=>{const d=parseDate(dt);return{rota:r,date:d,ym:ymKey(d),prod:p};});
+  state.carregamento = C.map(([r,dt,v,h,p])=>{const d=parseDate(dt);return{rota:r,date:d,ym:ymKey(d),vol:v,hours:h,pessoas:p};});
 }
 
 /* ================= UTIL/EVENTOS ================= */
