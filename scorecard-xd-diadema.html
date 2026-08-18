@@ -319,14 +319,14 @@ body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:8px}
       <section class="section">
         <div class="eyebrow" style="--c:var(--cyan)">
           <span class="tag">Descarga</span>
-          <span class="desc" id="descDesc">produtividade por cliente · soma da coluna Produtividade</span>
+          <span class="desc" id="descDesc">produtividade por cliente · volumes ÷ HH (Homem-Hora)</span>
         </div>
         <div class="grid" id="descGrid"></div>
       </section>
       <section class="section">
         <div class="eyebrow" style="--c:var(--green)">
           <span class="tag">Carregamento</span>
-          <span class="desc" id="carDesc">produtividade por rota · soma da coluna Produtividade</span>
+          <span class="desc" id="carDesc">produtividade por rota · volumes ÷ HH (Homem-Hora)</span>
         </div>
         <div class="grid" id="carGrid"></div>
       </section>
@@ -373,8 +373,8 @@ const CONFIG = {
   SHEET_CARREGAMENTO: 'Base Carregamento',
 
   // Como agregar a produtividade:
-  //  'linha_somada' = Vol_somado / (Horas_somadas × Pessoas_somadas)  ← igual à sua "linha somada"
-  //  'pessoa_hora'  = Vol_somado / Σ(Horas × Pessoas)                  ← média ponderada por hora-pessoa
+  //  'pessoa_hora'  = Volume_somado ÷ HH_total,  onde HH = Σ(Pessoas × Tempo)   ← CORRETO (Homem-Hora)
+  //  'linha_somada' = Volume_somado ÷ (Horas_somadas × Pessoas_somadas)
   PROD_CALC: 'pessoa_hora',
 
   REFRESH_MS: 5 * 60 * 1000,   // recarrega dados a cada 5 min
@@ -822,9 +822,9 @@ function renderProdKpis(){
   const escC = state.filtro.cliente==='TODOS'?'todos os clientes':state.filtro.cliente;
   const escR = state.filtro.rota==='TODOS'?'todas as rotas':state.filtro.rota;
   const K=[
-    {c:'var(--cyan)',  lbl:'Produtividade descarga',    v:fmtDec(pd), sub:'vol ÷ (horas × pessoas)'},
+    {c:'var(--cyan)',  lbl:'Produtividade descarga',    v:fmtDec(pd), sub:'volumes ÷ HH (Homem-Hora)'},
     {c:'var(--blue)',  lbl:'Operações descarga',        v:fmtNum(d.length), sub:escC},
-    {c:'var(--green)', lbl:'Produtividade carregamento', v:fmtDec(pc), sub:'vol ÷ (horas × pessoas)'},
+    {c:'var(--green)', lbl:'Produtividade carregamento', v:fmtDec(pc), sub:'volumes ÷ HH (Homem-Hora)'},
     {c:'var(--violet)',lbl:'Operações carregamento',    v:fmtNum(c.length), sub:escR},
     {c:'var(--amber)', lbl:'Produtividade geral',       v:fmtDec(pg), sub:'descarga + carregamento'},
   ];
@@ -838,7 +838,7 @@ function renderDescarga(){
   const rows=filtDescarga();
   const prod=fmtDec(prodValue(rows));
   document.getElementById('descDesc').textContent =
-    'produtividade (vol ÷ horas × pessoas) por cliente · e por '+(state.filtro.periodo==='MES'?'mês':'dia');
+    'produtividade (volumes ÷ HH) por cliente · e por '+(state.filtro.periodo==='MES'?'mês':'dia');
   grid.appendChild(prodCard('Por cliente', {label:'Produtividade',value:prod},
     {color:'var(--cyan)'},
     (cv)=>{ const pairs=prodByEntity(rows,'cliente'); if(!pairs.length) return false;
@@ -855,7 +855,7 @@ function renderCarregamento(){
   const rows=filtCarreg();
   const prod=fmtDec(prodValue(rows));
   document.getElementById('carDesc').textContent =
-    'produtividade (vol ÷ horas × pessoas) por rota · e por '+(state.filtro.periodo==='MES'?'mês':'dia');
+    'produtividade (volumes ÷ HH) por rota · e por '+(state.filtro.periodo==='MES'?'mês':'dia');
   grid.appendChild(prodCard('Por rota', {label:'Produtividade',value:prod},
     {color:'var(--green)'},
     (cv)=>{ const pairs=prodByEntity(rows,'rota'); if(!pairs.length) return false;
