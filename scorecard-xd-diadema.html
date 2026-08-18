@@ -352,7 +352,7 @@ body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:8px}
     </div>
     <div class="mbody">
       <table class="data">
-        <thead><tr><th>Cliente</th><th>Identificador</th><th>Data Entrada</th><th class="n">Dias parados</th></tr></thead>
+        <thead id="mHead"></thead>
         <tbody id="mBody"></tbody>
       </table>
     </div>
@@ -531,12 +531,13 @@ function durHoras(kFrac,lFrac){
 // monta uma linha de produtividade só se passar no mesmo guardião da fórmula (F, K, L preenchidos e M>0)
 function linhaProd(r, iVol,iIni,iFim,iPes,dim,date){
   const volTxt=(r[iVol]??'').toString().trim();
-  const iniF=parseTimeFrac(r[iIni]), fimF=parseTimeFrac(r[iFim]);
+  const iniStr=(r[iIni]??'').toString().trim(), fimStr=(r[iFim]??'').toString().trim();
+  const iniF=parseTimeFrac(iniStr), fimF=parseTimeFrac(fimStr);
   const pes=parseNum(r[iPes]);
   if(volTxt==='' || iniF==null || fimF==null || pes<=0) return null;
   const h=durHoras(iniF,fimF);
   if(h==null || h<=0) return null;               // evita divisão por zero
-  return { date, ym:date?ymKey(date):'', vol:parseNum(volTxt), hours:h, pessoas:pes, dim };
+  return { date, ym:date?ymKey(date):'', vol:parseNum(volTxt), hours:h, pessoas:pes, dim, iniStr, fimStr };
 }
 function parseDescarga(rows){
   if(!rows||rows.length<2){ state.descarga=[]; return; }
@@ -550,7 +551,7 @@ function parseDescarga(rows){
   state.descarga = rows.slice(hr+1).map(r=>{
     const cli=(r[iC]||'').toString().trim().toUpperCase(); if(!cli) return null;
     const l=linhaProd(r,iVol,iIni,iFim,iPes,cli,parseDate(r[iD]));
-    return l ? {cliente:cli, date:l.date, ym:l.ym, vol:l.vol, hours:l.hours, pessoas:l.pessoas} : null;
+    return l ? {cliente:cli, date:l.date, ym:l.ym, vol:l.vol, hours:l.hours, pessoas:l.pessoas, iniStr:l.iniStr, fimStr:l.fimStr} : null;
   }).filter(Boolean);
 }
 function parseCarregamento(rows){
@@ -565,7 +566,7 @@ function parseCarregamento(rows){
   state.carregamento = rows.slice(hr+1).map(r=>{
     const rota=(r[iR]||'').toString().trim(); if(!rota) return null;
     const l=linhaProd(r,iVol,iIni,iFim,iPes,rota,parseDate(r[iD]));
-    return l ? {rota:rota, date:l.date, ym:l.ym, vol:l.vol, hours:l.hours, pessoas:l.pessoas} : null;
+    return l ? {rota:rota, date:l.date, ym:l.ym, vol:l.vol, hours:l.hours, pessoas:l.pessoas, iniStr:l.iniStr, fimStr:l.fimStr} : null;
   }).filter(Boolean);
 }
 function buildDerived(){
@@ -786,13 +787,18 @@ function prodOpts(){
   o.scales.y.ticks.callback=(v)=> fmtDec(v);
   return o;
 }
-function makeEntityChart(canvas, pairs, colorFn){
+function makeEntityChart(canvas, pairs, colorFn, onBarClick){
   const labels=pairs.map(p=>p[0]), data=pairs.map(p=>p[1]);
   const sz=barSizing(labels.length);
   const colors=pairs.map((p,i)=> colorFn(p[0], i));
+  const opts=prodOpts();
+  if(onBarClick){
+    opts.onClick=(e,els)=>{ if(els.length) onBarClick(labels[els[0].index]); };
+    opts.onHover=(e,els)=>{ e.native.target.style.cursor = els.length?'pointer':'default'; };
+  }
   const ch=new Chart(canvas,{type:'bar',data:{labels,datasets:[
       {data,backgroundColor:colors,borderRadius:5,maxBarThickness:sz.thick,categoryPercentage:Math.max(sz.cat,0.55),barPercentage:0.9}]},
-    options:prodOpts()});
+    options:opts});
   state.charts.push(ch); return ch;
 }
 function makePeriodChart(canvas, labels, data, color){
@@ -805,11 +811,12 @@ function makePeriodChart(canvas, labels, data, color){
 function prodCard(title, sub, chartClass, buildFn, emptyMsg){
   const card=document.createElement('div');
   card.className='card'; card.style.setProperty('--c', chartClass.color);
+  const hint = /por (cliente|rota)/i.test(title) ? '<div class="hint">Clique numa barra para ver as operações e exportar.</div>' : '';
   card.innerHTML=`
     <div class="head"><div class="who">${title}</div>
       <div class="mini"><span>${sub.label}<b class="num" style="color:${chartClass.color}">${sub.value}</b></span></div>
     </div>
-    <div class="chartbox ${chartClass.small?'small':''}"><canvas></canvas></div>`;
+    <div class="chartbox ${chartClass.small?'small':''}"><canvas></canvas></div>${hint}`;
   requestAnimationFrame(()=>{
     const has=buildFn(card.querySelector('canvas'));
     if(!has) card.querySelector('.chartbox').innerHTML=`<div class="empty">${emptyMsg}</div>`;
@@ -842,7 +849,8 @@ function renderDescarga(){
   grid.appendChild(prodCard('Por cliente', {label:'Produtividade',value:prod},
     {color:'var(--cyan)'},
     (cv)=>{ const pairs=prodByEntity(rows,'cliente'); if(!pairs.length) return false;
-      makeEntityChart(cv, pairs, (name)=>corClienteHex(name)); return true; },
+      makeEntityChart(cv, pairs, (name)=>corClienteHex(name),
+        (name)=>openProdModal(name, rows.filter(r=>r.cliente===name))); return true; },
     'Sem dados de descarga no filtro'));
   grid.appendChild(prodCard('Por período', {label:'Produtividade',value:prod},
     {color:'var(--cyan)'},
@@ -859,7 +867,8 @@ function renderCarregamento(){
   grid.appendChild(prodCard('Por rota', {label:'Produtividade',value:prod},
     {color:'var(--green)'},
     (cv)=>{ const pairs=prodByEntity(rows,'rota'); if(!pairs.length) return false;
-      makeEntityChart(cv, pairs, (name,i)=>corRota(name,i)); return true; },
+      makeEntityChart(cv, pairs, (name,i)=>corRota(name,i),
+        (name)=>openProdModal(name, rows.filter(r=>r.rota===name))); return true; },
     'Sem dados de carregamento no filtro'));
   grid.appendChild(prodCard('Por período', {label:'Produtividade',value:prod},
     {color:'var(--green)'},
@@ -909,30 +918,71 @@ function tooltipCfg(){
 }
 
 /* ================= MODAL AGING ================= */
-let modalRows=[], modalTitle='';
-function openAgingModal(cliente, bucket, rows){
-  modalRows=rows.slice().sort((a,b)=>b.dias-a.dias);
-  modalTitle=`aging_${cliente}_${bucket==='0'?'0dias':'mais0dias'}`;
-  document.getElementById('mTitle').textContent = `Aging · ${cliente}`;
-  const badge = bucket==='0' ? '<span class="badge amber">0 dias</span>' : '<span class="badge red">+0 dias</span>';
-  document.getElementById('mSub').innerHTML = `${badge} &nbsp; ${rows.length} ${rows.length===1?'item':'itens'}`;
-  document.getElementById('mBody').innerHTML = modalRows.map(r=>`
-    <tr><td>${r.cliente}</td><td>${r.id||'—'}</td><td>${r.date?r.date.toISOString().slice(0,10):'—'}</td>
-    <td class="n">${fmtNum(r.dias)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Sem itens</td></tr>';
+let modalCols=[], modalData=[], modalFilename='dados', modalSheet='Dados';
+function openTableModal({title, subHtml, columns, rows, filename, sheet}){
+  modalCols=columns; modalData=rows; modalFilename=filename||'dados'; modalSheet=sheet||'Dados';
+  document.getElementById('mTitle').textContent = title;
+  document.getElementById('mSub').innerHTML = subHtml||'';
+  document.getElementById('mHead').innerHTML =
+    '<tr>'+columns.map(c=>`<th class="${c.align==='n'?'n':''}">${c.label}</th>`).join('')+'</tr>';
+  document.getElementById('mBody').innerHTML = rows.length
+    ? rows.map(r=>'<tr>'+columns.map(c=>{
+        const v=r[c.key]; const disp=(v==null||v==='')?'—':(c.fmt?c.fmt(v):v);
+        return `<td class="${c.align==='n'?'n':''}">${disp}</td>`;
+      }).join('')+'</tr>').join('')
+    : `<tr><td colspan="${columns.length}" class="empty">Sem itens</td></tr>`;
   document.getElementById('overlay').classList.add('show');
 }
 function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
 function exportXlsx(){
-  const data = modalRows.map(r=>({
-    Cliente:r.cliente, Identificador:r.id,
-    'Data Entrada': r.date? r.date.toISOString().slice(0,10):'',
-    'Dias Parados': r.dias
-  }));
+  const data = modalData.map(r=>{ const o={}; modalCols.forEach(c=> o[c.label]=r[c.key]); return o; });
   const ws=XLSX.utils.json_to_sheet(data);
-  ws['!cols']=[{wch:12},{wch:26},{wch:14},{wch:14}];
+  ws['!cols']=modalCols.map(c=>({wch:Math.max(10,c.label.length+2)}));
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Aging');
-  XLSX.writeFile(wb, modalTitle+'.xlsx');
+  XLSX.utils.book_append_sheet(wb, ws, modalSheet.slice(0,31));
+  XLSX.writeFile(wb, modalFilename+'.xlsx');
+}
+const isoDate=(d)=> d? d.toISOString().slice(0,10):'';
+function openAgingModal(cliente, bucket, rows){
+  const data=rows.slice().sort((a,b)=>b.dias-a.dias).map(r=>({
+    cliente:r.cliente, id:r.id||'', data:isoDate(r.date), dias:r.dias
+  }));
+  const badge = bucket==='0' ? '<span class="badge amber">0 dias</span>' : '<span class="badge red">+0 dias</span>';
+  openTableModal({
+    title:`Aging · ${cliente}`,
+    subHtml:`${badge} &nbsp; ${rows.length} ${rows.length===1?'item':'itens'}`,
+    columns:[
+      {key:'cliente',label:'Cliente'},
+      {key:'id',label:'Identificador'},
+      {key:'data',label:'Data Entrada'},
+      {key:'dias',label:'Dias parados',align:'n',fmt:fmtNum},
+    ],
+    rows:data, sheet:'Aging',
+    filename:`aging_${cliente}_${bucket==='0'?'0dias':'mais0dias'}`
+  });
+}
+function openProdModal(entity, rows){
+  const data=rows.slice().sort((a,b)=> isoDate(a.date)<isoDate(b.date)?-1:1).map(r=>({
+    data:isoDate(r.date), vol:r.vol, ini:r.iniStr||'', fim:r.fimStr||'',
+    tempo:r.hours, pes:r.pessoas, hh:r.hours*r.pessoas
+  }));
+  const volT=rows.reduce((s,r)=>s+r.vol,0), hhT=rows.reduce((s,r)=>s+r.hours*r.pessoas,0);
+  const prod = hhT>0? volT/hhT : 0;
+  openTableModal({
+    title:`Produtividade · ${entity}`,
+    subHtml:`${rows.length} operações &nbsp;·&nbsp; ${fmtNum(volT)} vol ÷ ${fmtDec(hhT)} HH = <b style="color:var(--cyan)">${fmtDec(prod)}</b> vol/HH`,
+    columns:[
+      {key:'data',label:'Data'},
+      {key:'vol',label:'Volume',align:'n',fmt:fmtNum},
+      {key:'ini',label:'Início'},
+      {key:'fim',label:'Término'},
+      {key:'tempo',label:'Tempo (h)',align:'n',fmt:fmtDec},
+      {key:'pes',label:'Pessoas',align:'n',fmt:fmtNum},
+      {key:'hh',label:'HH',align:'n',fmt:fmtDec},
+    ],
+    rows:data, sheet:'Produtividade',
+    filename:`produtividade_${(''+entity).replace(/[^\w]+/g,'_')}`
+  });
 }
 
 /* ================= TV MODE (apresentação) ================= */
@@ -1047,22 +1097,24 @@ function loadDemo(){
   ];
 }
 function loadDemoProd(){
-  // [dimensão, data, vol, horas, pessoas]
+  // [dimensão, data, vol, início, término, pessoas]
+  const mk=(dim,dt,v,ini,fim,p)=>{const d=parseDate(dt);const kf=parseTimeFrac(ini),lf=parseTimeFrac(fim);
+    return {dim, date:d, ym:ymKey(d), vol:v, hours:durHoras(kf,lf), pessoas:p, iniStr:ini, fimStr:fim};};
   const D=[
-    ['EATON','2026-08-11',744,6.25,6],['GM SOROCABA','2026-08-11',856,2.5,4],
-    ['EATON','2026-08-12',509,1.5,6],['GM SOROCABA','2026-08-12',228,1.5,3],
-    ['HYUNDAI MOBIS','2026-08-12',214,3.0,2],
-    ['EATON','2026-08-13',613,2.0,5],['GM SOROCABA','2026-08-13',365,1.333,5],
-    ['EATON','2026-07-20',400,1.8,4],['GM SOROCABA','2026-07-20',300,1.2,3],
+    mk('EATON','2026-08-11',744,'23:20','5:35',6), mk('GM SOROCABA','2026-08-11',856,'21:00','23:30',4),
+    mk('EATON','2026-08-12',509,'16:40','18:10',6), mk('GM SOROCABA','2026-08-12',228,'1:50','3:20',3),
+    mk('HYUNDAI MOBIS','2026-08-12',214,'18:00','21:00',2),
+    mk('EATON','2026-08-13',613,'20:50','22:50',5), mk('GM SOROCABA','2026-08-13',365,'3:50','5:10',5),
+    mk('EATON','2026-07-20',400,'9:00','10:48',4), mk('GM SOROCABA','2026-07-20',300,'8:00','9:12',3),
   ];
-  state.descarga = D.map(([c,dt,v,h,p])=>{const d=parseDate(dt);return{cliente:c,date:d,ym:ymKey(d),vol:v,hours:h,pessoas:p};});
+  state.descarga = D.map(r=>({cliente:r.dim, date:r.date, ym:r.ym, vol:r.vol, hours:r.hours, pessoas:r.pessoas, iniStr:r.iniStr, fimStr:r.fimStr}));
   const C=[
-    ['ROTA DIRETA MINAS','2026-08-11',415,5.0,5],['GM RJ','2026-08-11',85,2.083,1],
-    ['ROTA DIRETA GOINIA','2026-08-12',352,5.0,2],['ROTA DIRETA BRASILIA','2026-08-12',497,3.3,2],
-    ['ROTA DIRETA MINAS','2026-08-13',619,4.5,2],['DA - 05','2026-08-13',47,2.5,1],
-    ['ROTA DIRETA GOINIA','2026-07-22',359,2.5,2],['GM RJ','2026-07-22',120,2.0,1],
+    mk('ROTA DIRETA MINAS','2026-08-11',415,'15:00','20:00',5), mk('GM RJ','2026-08-11',85,'0:25','2:30',1),
+    mk('ROTA DIRETA GOINIA','2026-08-12',352,'22:00','3:00',2), mk('ROTA DIRETA BRASILIA','2026-08-12',497,'21:00','0:18',2),
+    mk('ROTA DIRETA MINAS','2026-08-13',619,'18:00','22:30',2), mk('DA - 05','2026-08-13',47,'8:00','10:30',1),
+    mk('ROTA DIRETA GOINIA','2026-07-22',359,'22:00','0:30',2), mk('GM RJ','2026-07-22',120,'8:00','10:00',1),
   ];
-  state.carregamento = C.map(([r,dt,v,h,p])=>{const d=parseDate(dt);return{rota:r,date:d,ym:ymKey(d),vol:v,hours:h,pessoas:p};});
+  state.carregamento = C.map(r=>({rota:r.dim, date:r.date, ym:r.ym, vol:r.vol, hours:r.hours, pessoas:r.pessoas, iniStr:r.iniStr, fimStr:r.fimStr}));
 }
 
 /* ================= UTIL/EVENTOS ================= */
