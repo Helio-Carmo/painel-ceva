@@ -199,6 +199,10 @@ body.tv .top{margin-bottom:8px}
 body.tv .brand h1{font-size:34px}
 body.tv .tvstage{display:flex;flex-direction:column;flex:1;min-height:0}
 .tvstage .tvgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1;min-height:0}
+.tvstage .tvkpis{display:grid;gap:12px;margin-bottom:12px}
+.tvstage .tvkpis .kpi{padding:10px 16px}
+.tvstage .tvkpis .kpi .lbl{font-size:9px}
+.tvstage .tvkpis .kpi .v{font-size:32px;margin-top:2px}
 .tvstage .card{display:flex;flex-direction:column;min-height:0;margin:0}
 .tvstage .chartbox,.tvstage .chartbox.small{flex:1;height:auto;min-height:0}
 .tvbar{display:none}
@@ -877,11 +881,42 @@ function buildTvPages(){
   if(!pages.length) pages.push({kind:'vol', cliente:'—', label:'VOLUME'});
   return pages;
 }
+function tvVolumeKpis(cli){
+  const rows=state.agregado.filter(r=>(cli==='—'||r.cliente===cli)&&matchDate(r));
+  const ent=rows.reduce((s,r)=>s+r.entrada,0), sai=rows.reduce((s,r)=>s+r.saida,0);
+  const ader=ent?(sai/ent*100):0;
+  const ag=state.aging.filter(r=>(cli==='—'||r.cliente===cli)&&matchDate(r));
+  const z=ag.filter(a=>a.dias===0).length, p=ag.filter(a=>a.dias>0).length;
+  return [
+    {c:'var(--cyan)', lbl:'Volume entrada', v:fmtNum(ent)},
+    {c:'var(--green)',lbl:'Volume saída',   v:fmtNum(sai)},
+    {c:'var(--blue)', lbl:'Aderência saída',v:ader.toFixed(0)+'%'},
+    {c:'var(--amber)',lbl:'Aging · 0 dias', v:fmtNum(z)},
+    {c:'var(--red)',  lbl:'Aging · +0 dias',v:fmtNum(p)},
+  ];
+}
+function tvProdKpis(){
+  const d=state.descarga.filter(matchDate), c=state.carregamento.filter(matchDate);
+  const sd=d.reduce((s,r)=>s+r.prod,0), sc=c.reduce((s,r)=>s+r.prod,0);
+  return [
+    {c:'var(--cyan)',  lbl:'Prod. descarga',    v:fmtNum(sd)},
+    {c:'var(--blue)',  lbl:'Operações descarga',v:fmtNum(d.length)},
+    {c:'var(--green)', lbl:'Prod. carregamento',v:fmtNum(sc)},
+    {c:'var(--violet)',lbl:'Operações carreg.',  v:fmtNum(c.length)},
+    {c:'var(--amber)', lbl:'Prod. total',       v:fmtNum(sd+sc)},
+  ];
+}
 function renderTV(){
   const stage=document.getElementById('tvStage'); stage.innerHTML='';
-  const grid=document.createElement('div'); grid.className='tvgrid'; stage.appendChild(grid);
   const pages=buildTvPages();
   const page=pages[state.tv.idx % pages.length];
+  // faixa de KPIs compacta do slide atual
+  const kdata = page.kind==='prod' ? tvProdKpis() : tvVolumeKpis(page.cliente);
+  const kpiRow=document.createElement('div'); kpiRow.className='tvkpis';
+  kpiRow.style.gridTemplateColumns=`repeat(${kdata.length},minmax(0,1fr))`;
+  kpiRow.innerHTML=kdata.map(k=>`<div class="kpi" style="--c:${k.c}"><div class="lbl">${k.lbl}</div><div class="v num">${k.v}</div></div>`).join('');
+  stage.appendChild(kpiRow);
+  const grid=document.createElement('div'); grid.className='tvgrid'; stage.appendChild(grid);
 
   if(page.kind==='prod'){
     const d=state.descarga.filter(matchDate), c=state.carregamento.filter(matchDate);
@@ -1018,4 +1053,4 @@ loadData();
 setInterval(()=>{ loadData(); }, CONFIG.REFRESH_MS); // auto-refresh dos dados
 </script>
 </body>
-</html>s
+</html>
