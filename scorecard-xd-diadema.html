@@ -252,6 +252,7 @@ body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:8px}
 
       <div class="controls">
         <div class="seg" id="periodo" title="Granularidade dos gráficos por período">
+          <button data-p="HORA">Hora</button>
           <button data-p="DIA" class="on">Dia</button>
           <button data-p="MES">Mês</button>
         </div>
@@ -371,6 +372,7 @@ body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:8px}
 const CONFIG = {
   SHEET_ID: '1p0NXq_JhFc6WmhIS-i9NewbYhZ7KaQvlEaVmX_Pojl4',
   SHEET_AGREGADO: 'Dashboard_Agregado',
+  SHEET_HORARIO: 'Dashboard_Horario',
   SHEET_AGING: 'Base_Aging',
 
   // Planilha de Tracking (produtividade). Se estiver em OUTRO arquivo, cole o ID aqui;
@@ -426,7 +428,7 @@ try{ Chart.register(targetLinePlugin); }catch(e){}
 
 /* ================= ESTADO ================= */
 const state = {
-  agregado: [], aging: [], descarga: [], carregamento: [],
+  agregado: [], horario: [], aging: [], descarga: [], carregamento: [],
   volClientes: [], volAnos: [], prodClientes: [], rotas: [], prodAnos: [],
   filtro: { cliente:'TODOS', rota:'TODOS', ano:'TODOS', mes:'TODOS', periodo:'DIA', de:'', ate:'' },
   view: 'volumes',
@@ -466,6 +468,18 @@ function parseDate(v){
   m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);    // dd/mm/yyyy
   if(m) return new Date(+m[3], +m[2]-1, +m[1]);
   const d=new Date(s); return isNaN(d)?null:d;
+}
+// como parseDate, mas preserva a HORA (para a base Dashboard_Horario)
+function parseDateTime(v){
+  if(v==null) return null;
+  const s=(''+v).trim();
+  let m=s.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+)(?:,(\d+))?)?\)/);
+  if(m) return new Date(+m[1],+m[2],+m[3],+(m[4]||0),+(m[5]||0),+(m[6]||0));
+  m=s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})/);
+  if(m) return new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]);
+  m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})[ ,]+(\d{1,2}):(\d{2})/);
+  if(m) return new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]);
+  return parseDate(v);
 }
 const fmtDate=(d)=> d? `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}` : '';
 const fmtNum=(n)=> Math.round(n).toLocaleString('pt-BR');
@@ -532,6 +546,11 @@ async function loadData(){
     if(!state.demo){ banner(true); }
     loadDemoProd();
   }
+  // Base horária (opcional) — usada quando o período for "Hora"
+  try{
+    const hor = await fetchCsv(CONFIG.SHEET_HORARIO);
+    parseHorario(hor||[]);
+  }catch(err){ console.warn('Falha ao ler Dashboard_Horario:', err); state.horario=[]; }
   // Metas (aba Setup) — não bloqueia nada se faltar
   try{
     const setup = await fetchCsv(CONFIG.SHEET_SETUP);
@@ -540,8 +559,7 @@ async function loadData(){
   buildDerived();
   populateFilters();
   render();
-  document.getElementById('liveTxt').textContent =
-    `ao vivo · ${nowHMS()} · aging: ${state.agingSource||'—'} (${fmtNum(state.aging.length)})`;
+  document.getElementById('liveTxt').textContent = 'ao vivo · atualizado ' + nowHMS();
   // aviso visível se o Apps Script foi configurado mas a leitura caiu no gviz (truncado)
   if(!state.demo && CONFIG.AGING_JSON_URL && state.agingSource!=='Apps Script'){
     document.getElementById('bannerTxt').innerHTML =
@@ -556,6 +574,19 @@ function parseAgregado(rows){
         iS=findCol(h,'Volume_Saida','Volume Saída','Saida','Saída');
   state.agregado = rows.slice(1).map(r=>{
     const d=parseDate(r[iD]); if(!d) return null;
+    return { date:d, ym:ymKey(d), cliente:(r[iO]||'?').toString().trim().toUpperCase(),
+             entrada:parseNum(r[iE]), saida:parseNum(r[iS]) };
+  }).filter(Boolean);
+}
+function parseHorario(rows){
+  if(!rows||rows.length<2){ state.horario=[]; return; }
+  const h=rows[0];
+  const iD=findCol(h,'Data e Hora','Data_Hora','DataHora','Data'),
+        iO=findCol(h,'Operação','Operacao','Cliente'),
+        iE=findCol(h,'Volume_Entrada','Volume Entrada','Entrada'),
+        iS=findCol(h,'Volume_Saida','Volume Saída','Saida','Saída');
+  state.horario = rows.slice(1).map(r=>{
+    const d=parseDateTime(r[iD]); if(!d) return null;
     return { date:d, ym:ymKey(d), cliente:(r[iO]||'?').toString().trim().toUpperCase(),
              entrada:parseNum(r[iE]), saida:parseNum(r[iS]) };
   }).filter(Boolean);
@@ -673,6 +704,7 @@ function buildDerived(){
   const volCli=new Set(), volAnos=new Set(), prodCli=new Set(), rot=new Set(), prodAnos=new Set();
   // Volumes: clientes/anos vêm de Dashboard_Agregado + Base_Aging
   state.agregado.forEach(r=>{volCli.add(r.cliente); volAnos.add(r.date.getFullYear());});
+  state.horario.forEach(r=>{volCli.add(r.cliente); if(r.date) volAnos.add(r.date.getFullYear());});
   state.aging.forEach(r=>{volCli.add(r.cliente); if(r.date) volAnos.add(r.date.getFullYear());});
   // Produtividade: cliente vem da Descarga, rota do Carregamento, ano das duas
   state.descarga.forEach(r=>{prodCli.add(r.cliente); if(r.date) prodAnos.add(r.date.getFullYear());});
@@ -742,7 +774,7 @@ function render(){
   if(state.view==='prod'){
     renderProdKpis(); renderDescarga(); renderCarregamento();
   }else{
-    const per = state.filtro.periodo==='MES' ? 'mês' : 'dia';
+    const per = state.filtro.periodo==='MES' ? 'mês' : (state.filtro.periodo==='HORA' ? 'hora' : 'dia');
     const esc = state.filtro.cliente==='TODOS'?'todos os clientes':state.filtro.cliente;
     const ve=document.getElementById('volEntDesc'); if(ve) ve.textContent = `por ${per} · ${esc}`;
     const vs=document.getElementById('volSaiDesc'); if(vs) vs.textContent = `por ${per} · ${esc}`;
@@ -780,14 +812,27 @@ function renderKpis(){
 }
 
 function computeVolumeSeries(cli){
-  const rows=state.agregado.filter(r=>(cli==='—'||r.cliente===cli) && matchDate(r));
-  const porMes = state.filtro.periodo==='MES';
+  const per=state.filtro.periodo, porMes=per==='MES', porHora=per==='HORA';
+  const src = porHora ? state.horario : state.agregado;
+  const rows=src.filter(r=>(cli==='—'||r.cliente===cli) && matchDate(r));
   const map=new Map();
-  rows.forEach(r=>{const k=porMes?ymKey(r.date):r.date.getTime();
-    if(!map.has(k))map.set(k,{e:0,s:0,d:r.date}); const o=map.get(k); o.e+=r.entrada; o.s+=r.saida;});
+  rows.forEach(r=>{
+    const d=r.date; let k;
+    if(porHora)      k=new Date(d.getFullYear(),d.getMonth(),d.getDate(),d.getHours()).getTime();
+    else if(porMes)  k=ymKey(d);
+    else             k=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();
+    if(!map.has(k)) map.set(k,{e:0,s:0,d});
+    const o=map.get(k); o.e+=r.entrada; o.s+=r.saida;
+  });
   const entries=[...map.entries()].sort((a,b)=> porMes ? (a[0]<b[0]?-1:1) : (a[0]-b[0]));
   const labels=[],ent=[],sai=[];
-  entries.forEach(([k,o])=>{ labels.push(porMes?MESES[o.d.getMonth()]+'/'+String(o.d.getFullYear()).slice(2):fmtDate(o.d)); ent.push(o.e); sai.push(o.s); });
+  entries.forEach(([k,o])=>{
+    let lab;
+    if(porHora)     lab=`${fmtDate(o.d)} ${String(o.d.getHours()).padStart(2,'0')}h`;
+    else if(porMes) lab=MESES[o.d.getMonth()]+'/'+String(o.d.getFullYear()).slice(2);
+    else            lab=fmtDate(o.d);
+    labels.push(lab); ent.push(o.e); sai.push(o.s);
+  });
   return {labels,ent,sai,totalE:ent.reduce((a,b)=>a+b,0),totalS:sai.reduce((a,b)=>a+b,0)};
 }
 function makeVolumeChart(canvas, s){
@@ -1236,6 +1281,15 @@ function loadDemo(){
     ...mkAge('GM','GM-EXP-',7,0,'2026-08-07'),
     ...mkAge('GM','GM-EXP-',5,4,'2026-08-07'),
   ];
+  // base horária de exemplo (1 e 2 de julho, algumas horas)
+  const H=[];
+  ['2026-07-01','2026-07-02'].forEach(dia=>{
+    [0,3,5,9,12,16,19,21,22,23].forEach(hh=>{
+      H.push([`${dia} ${String(hh).padStart(2,'0')}:00`,'EATON', Math.round(50+Math.random()*450), Math.round(30+Math.random()*400)]);
+      if(hh%6===0) H.push([`${dia} ${String(hh).padStart(2,'0')}:00`,'GM', Math.round(20+Math.random()*250), Math.round(10+Math.random()*200)]);
+    });
+  });
+  state.horario = H.map(([dt,c,e,s])=>{const d=parseDateTime(dt);return{date:d,ym:ymKey(d),cliente:c,entrada:e,saida:s};});
 }
 function loadDemoProd(){
   // [dimensão, data, vol, início, término, pessoas]
