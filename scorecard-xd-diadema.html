@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Scorecard XD · Diadema</title>
-<link rel="icon" type="image/png" href="icon.png?v=2">
+
 <!-- Bibliotecas (CDN) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -307,7 +307,7 @@ body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:8px}
       <section class="section">
         <div class="eyebrow" style="--c:var(--amber)">
           <span class="tag">Aging</span>
-          <span class="desc">itens parados · clique na barra para ver os itens e exportar</span>
+          <span class="desc" id="ageDesc">itens parados · clique na barra para ver os itens e exportar</span>
         </div>
         <div class="grid" id="ageGrid"></div>
       </section>
@@ -377,6 +377,10 @@ const CONFIG = {
   //  'linha_somada' = Volume_somado ÷ (Horas_somadas × Pessoas_somadas)
   PROD_CALC: 'pessoa_hora',
 
+  // Bases grandes: se o gviz truncar a leitura, cole aqui o link CSV de "Publicar na web"
+  // da aba (Arquivo → Compartilhar → Publicar na web → aba → CSV). Vazio = usa o gviz normal.
+  AGING_CSV_URL: '',
+
   REFRESH_MS: 5 * 60 * 1000,   // recarrega dados a cada 5 min
   TV_ROTATE_MS: 14 * 1000,     // troca o cliente em foco no modo TV a cada 14s
 };
@@ -439,9 +443,9 @@ const fmtDec=(n)=> (Math.round(n*10)/10).toLocaleString('pt-BR',{minimumFraction
 const ymKey=(d)=> `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 
 /* ================= LOAD ================= */
-function fetchCsv(sheet, id){
+function fetchCsv(sheet, id, directUrl){
   return new Promise((resolve,reject)=>{
-    Papa.parse(csvUrl(sheet, id), {
+    Papa.parse(directUrl || csvUrl(sheet, id), {
       download:true, header:false, skipEmptyLines:true,
       complete:(r)=> resolve(r.data),
       error:(e)=> reject(e),
@@ -450,7 +454,10 @@ function fetchCsv(sheet, id){
 }
 async function loadData(){
   try{
-    const [ag, aging] = await Promise.all([ fetchCsv(CONFIG.SHEET_AGREGADO), fetchCsv(CONFIG.SHEET_AGING) ]);
+    const [ag, aging] = await Promise.all([
+      fetchCsv(CONFIG.SHEET_AGREGADO),
+      fetchCsv(CONFIG.SHEET_AGING, undefined, CONFIG.AGING_CSV_URL)
+    ]);
     if(!ag || ag.length<2 || !aging || aging.length<1) throw new Error('vazio');
     parseAgregado(ag); parseAging(aging);
     state.demo=false; banner(false);
@@ -493,12 +500,18 @@ function parseAging(rows){
         iId=findCol(h,'Identificador','Identificador (Código)','Codigo','Código'),
         iD=findCol(h,'Data Entrada','Data_Entrada','DataEntrada'),
         iDias=findCol(h,'Dias Parados','Dias_Parados','DiasParados','Dias');
-  state.aging = rows.slice(1).map(r=>{
+  const body=rows.slice(1);
+  state.agingRead = body.length;
+  state.aging = body.map(r=>{
     const d=parseDate(r[iD]);
-    return { cliente:(r[iO]||'?').toString().trim().toUpperCase(),
-             id:(r[iId]||'').toString().trim(),
-             date:d, ym:d?ymKey(d):'', dias:parseNum(r[iDias]) };
-  }).filter(x=>x.cliente!=='?' || x.id);
+    const cli=(r[iO]||'').toString().trim().toUpperCase();
+    const id=(r[iId]||'').toString().trim();
+    const diasTxt=(r[iDias]??'').toString().trim();
+    // só descarta a linha se estiver totalmente vazia (sem cliente, id, data e dias)
+    if(!cli && !id && !d && diasTxt==='') return null;
+    return { cliente:cli||'—', id, date:d, ym:d?ymKey(d):'', dias:parseNum(diasTxt) };
+  }).filter(Boolean);
+  console.log(`[Aging] ${state.agingRead} linhas lidas na base · ${state.aging.length} válidas`);
 }
 // acha a linha de cabeçalho (planilhas têm linha de título "Descarga"/"Carregamento" antes)
 function findHeaderRow(rows){
@@ -644,6 +657,8 @@ function render(){
   }else{
     const per = state.filtro.periodo==='MES' ? 'mês' : 'dia';
     document.getElementById('volDesc').textContent = 'entrada × saída por '+per;
+    const ad=document.getElementById('ageDesc');
+    if(ad) ad.textContent = `itens parados · ${fmtNum(state.aging.length)} na base · clique na barra para exportar`;
     renderKpis(); renderVolume(); renderAging();
   }
   renderTvBar();
