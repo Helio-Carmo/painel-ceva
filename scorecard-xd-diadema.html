@@ -465,13 +465,22 @@ async function fetchJsonRows(url){
   if(!Array.isArray(data)) throw new Error('formato inesperado');
   return data;
 }
+// tenta ler o aging na ordem: Apps Script -> CSV publicado -> gviz; registra a fonte usada
+async function loadAging(){
+  const tries=[];
+  if(CONFIG.AGING_JSON_URL) tries.push(['Apps Script', ()=>fetchJsonRows(CONFIG.AGING_JSON_URL)]);
+  if(CONFIG.AGING_CSV_URL)  tries.push(['CSV publicado', ()=>fetchCsv(CONFIG.SHEET_AGING, undefined, CONFIG.AGING_CSV_URL)]);
+  tries.push(['gviz', ()=>fetchCsv(CONFIG.SHEET_AGING)]);
+  for(const [src,fn] of tries){
+    try{ const a=await fn(); if(a && a.length>1){ state.agingSource=src; console.log('[Aging] fonte:', src); return a; } }
+    catch(e){ console.warn('[Aging] falha via '+src+':', e); }
+  }
+  return null;
+}
 async function loadData(){
   try{
-    const agingP = CONFIG.AGING_JSON_URL
-      ? fetchJsonRows(CONFIG.AGING_JSON_URL)
-      : fetchCsv(CONFIG.SHEET_AGING, undefined, CONFIG.AGING_CSV_URL);
-    const [ag, aging] = await Promise.all([ fetchCsv(CONFIG.SHEET_AGREGADO), agingP ]);
-    if(!ag || ag.length<2 || !aging || aging.length<1) throw new Error('vazio');
+    const [ag, aging] = await Promise.all([ fetchCsv(CONFIG.SHEET_AGREGADO), loadAging() ]);
+    if(!ag || ag.length<2 || !aging) throw new Error('vazio');
     parseAgregado(ag); parseAging(aging);
     state.demo=false; banner(false);
   }catch(err){
@@ -672,7 +681,7 @@ function render(){
     const per = state.filtro.periodo==='MES' ? 'mês' : 'dia';
     document.getElementById('volDesc').textContent = 'entrada × saída por '+per;
     const ad=document.getElementById('ageDesc');
-    if(ad) ad.textContent = `${fmtNum(state.aging.length)} válidas de ${fmtNum(state.agingRead||state.aging.length)} lidas na base · clique na barra para exportar`;
+    if(ad) ad.textContent = `${fmtNum(state.aging.length)} válidas de ${fmtNum(state.agingRead||state.aging.length)} lidas · fonte: ${state.agingSource||'gviz'} · clique na barra para exportar`;
     renderKpis(); renderVolume(); renderAging();
   }
   renderTvBar();
