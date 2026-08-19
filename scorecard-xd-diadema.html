@@ -379,7 +379,7 @@ const CONFIG = {
 
   // Bases grandes / sempre ao vivo: cole a URL /exec do Apps Script (retorna a aba em JSON).
   // É a forma mais confiável (não trunca nem defasa). Tem prioridade sobre o CSV abaixo.
-  AGING_JSON_URL: '',
+  AGING_JSON_URL: 'https://script.google.com/macros/s/AKfycbyvw0amt6nn16AFDKm5_8E2oSDk_cAVNMlVLgnwVd61o7vZAAjztbCj5_3T0MpYs4ZQ/exec',
   // Alternativa: link CSV de "Publicar na web" da aba de Aging (usado só se AGING_JSON_URL estiver vazio).
   AGING_CSV_URL: '',
 
@@ -451,6 +451,7 @@ function fetchCsv(sheet, id, directUrl){
   return new Promise((resolve,reject)=>{
     Papa.parse(url, {
       download:true, header:false, skipEmptyLines:true,
+      downloadRequestHeaders:{'Cache-Control':'no-cache'},
       complete:(r)=> resolve(r.data),
       error:(e)=> reject(e),
     });
@@ -459,9 +460,12 @@ function fetchCsv(sheet, id, directUrl){
 // lê a aba pelo Apps Script (/exec) — retorna array de arrays (linha 0 = cabeçalho)
 async function fetchJsonRows(url){
   const u = url + (url.includes('?')?'&':'?') + '_=' + Date.now();
-  const res = await fetch(u, {redirect:'follow'});
+  const res = await fetch(u, {redirect:'follow', cache:'no-store'});
   if(!res.ok) throw new Error('HTTP '+res.status);
-  const data = await res.json();
+  const txt = await res.text();
+  let data;
+  try{ data = JSON.parse(txt); }
+  catch(e){ throw new Error('resposta não-JSON (provável tela de login do Apps Script)'); }
   if(!Array.isArray(data)) throw new Error('formato inesperado');
   return data;
 }
@@ -503,7 +507,8 @@ async function loadData(){
   buildDerived();
   populateFilters();
   render();
-  document.getElementById('liveTxt').textContent = 'ao vivo · atualizado ' + nowHMS();
+  document.getElementById('liveTxt').textContent =
+    `ao vivo · ${nowHMS()} · aging: ${state.agingSource||'—'} (${fmtNum(state.aging.length)})`;
   // aviso visível se o Apps Script foi configurado mas a leitura caiu no gviz (truncado)
   if(!state.demo && CONFIG.AGING_JSON_URL && state.agingSource!=='Apps Script'){
     document.getElementById('bannerTxt').innerHTML =
