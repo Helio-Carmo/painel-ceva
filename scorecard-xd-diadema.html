@@ -299,10 +299,17 @@ body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:8px}
       <section class="kpis" id="kpis"></section>
       <section class="section">
         <div class="eyebrow" style="--c:var(--cyan)">
-          <span class="tag">Volume</span>
-          <span class="desc" id="volDesc">entrada × saída por dia</span>
+          <span class="tag">Volume Entrada</span>
+          <span class="desc" id="volEntDesc">por dia · todos os clientes</span>
         </div>
-        <div class="grid" id="volGrid"></div>
+        <div class="grid" id="volEntGrid"></div>
+      </section>
+      <section class="section">
+        <div class="eyebrow" style="--c:var(--green)">
+          <span class="tag">Volume Saída</span>
+          <span class="desc" id="volSaiDesc">por dia · todos os clientes</span>
+        </div>
+        <div class="grid" id="volSaiGrid"></div>
       </section>
       <section class="section">
         <div class="eyebrow" style="--c:var(--amber)">
@@ -371,6 +378,7 @@ const CONFIG = {
   SHEET_ID_TRACKING: '',
   SHEET_DESCARGA: 'Base Descarga',
   SHEET_CARREGAMENTO: 'Base Carregamento',
+  SHEET_SETUP: 'Setup',   // metas (Target): Aderencia_Saida, Descarga, Carregamento
 
   // Como agregar a produtividade:
   //  'pessoa_hora'  = Volume_somado ÷ HH_total,  onde HH = Σ(Pessoas × Tempo)   ← CORRETO (Homem-Hora)
@@ -396,6 +404,25 @@ const corCliente = (c) => COR[c] || COR._default;
 const COR_HEX = { EATON:'#4aa3ff', GM:'#3fd07f', _default:'#9d7bff' };
 const corClienteHex = (c)=> COR_HEX[c] || COR_HEX._default;
 try{ if(window.ChartDataLabels) Chart.register(window.ChartDataLabels); }catch(e){}
+// linha de meta (target) nos gráficos de produtividade
+const targetLinePlugin = {
+  id:'targetLine',
+  afterDraw(chart){
+    const t = chart.options.plugins && chart.options.plugins.targetLine && chart.options.plugins.targetLine.value;
+    if(t==null || isNaN(t)) return;
+    const y=chart.scales.y, a=chart.chartArea; if(!y) return;
+    const yy=y.getPixelForValue(t);
+    if(yy<a.top || yy>a.bottom) return;
+    const ctx=chart.ctx; ctx.save();
+    ctx.strokeStyle='rgba(255,176,32,.85)'; ctx.lineWidth=1.5; ctx.setLineDash([6,4]);
+    ctx.beginPath(); ctx.moveTo(a.left,yy); ctx.lineTo(a.right,yy); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle='rgba(255,176,32,.95)';
+    ctx.font="700 10px Inter, sans-serif"; ctx.textAlign='right';
+    ctx.fillText('meta '+fmtDec(t), a.right-4, yy-4);
+    ctx.restore();
+  }
+};
+try{ Chart.register(targetLinePlugin); }catch(e){}
 
 /* ================= ESTADO ================= */
 const state = {
@@ -405,6 +432,7 @@ const state = {
   view: 'volumes',
   demo: false,
   showLabels: true,
+  targets: { aderencia:null, descarga:null, carregamento:null },
   charts: [],
   tv: { on:false, idx:0, timer:null },
 };
@@ -504,6 +532,11 @@ async function loadData(){
     if(!state.demo){ banner(true); }
     loadDemoProd();
   }
+  // Metas (aba Setup) — não bloqueia nada se faltar
+  try{
+    const setup = await fetchCsv(CONFIG.SHEET_SETUP);
+    parseSetup(setup||[]);
+  }catch(err){ console.warn('Falha ao ler Setup (metas):', err); }
   buildDerived();
   populateFilters();
   render();
@@ -617,6 +650,25 @@ function parseCarregamento(rows){
     return l ? {rota:rota, date:l.date, ym:l.ym, vol:l.vol, hours:l.hours, pessoas:l.pessoas, iniStr:l.iniStr, fimStr:l.fimStr} : null;
   }).filter(Boolean);
 }
+function parseSetup(rows){
+  const t={aderencia:null, descarga:null, carregamento:null};
+  (rows||[]).forEach(row=>{
+    for(let j=0;j<row.length;j++){
+      const key=norm(row[j]); if(!key) continue;
+      const val=row[j+1];
+      if(key.includes('aderencia')) t.aderencia=parseNum(val);
+      else if(key==='descarga') t.descarga=parseNum(val);
+      else if(key==='carregamento') t.carregamento=parseNum(val);
+    }
+  });
+  if(t.aderencia!=null && t.aderencia>0 && t.aderencia<=1) t.aderencia*=100; // 0,98 -> 98%
+  state.targets=t;
+  console.log('[Setup] metas:', t);
+}
+function corMeta(valor, meta, corPadrao){
+  if(meta==null || isNaN(meta)) return corPadrao;
+  return valor>=meta ? 'var(--green)' : 'var(--red)';
+}
 function buildDerived(){
   const volCli=new Set(), volAnos=new Set(), prodCli=new Set(), rot=new Set(), prodAnos=new Set();
   // Volumes: clientes/anos vêm de Dashboard_Agregado + Base_Aging
@@ -691,7 +743,9 @@ function render(){
     renderProdKpis(); renderDescarga(); renderCarregamento();
   }else{
     const per = state.filtro.periodo==='MES' ? 'mês' : 'dia';
-    document.getElementById('volDesc').textContent = 'entrada × saída por '+per;
+    const esc = state.filtro.cliente==='TODOS'?'todos os clientes':state.filtro.cliente;
+    const ve=document.getElementById('volEntDesc'); if(ve) ve.textContent = `por ${per} · ${esc}`;
+    const vs=document.getElementById('volSaiDesc'); if(vs) vs.textContent = `por ${per} · ${esc}`;
     const ad=document.getElementById('ageDesc');
     if(ad) ad.textContent = `${fmtNum(state.aging.length)} válidas de ${fmtNum(state.agingRead||state.aging.length)} lidas · fonte: ${state.agingSource||'gviz'} · clique na barra para exportar`;
     renderKpis(); renderVolume(); renderAging();
@@ -705,13 +759,15 @@ function renderKpis(){
   const sai=ag.reduce((s,r)=>s+r.saida,0);
   const ader= ent? (sai/ent*100):0;
   const parados=age.filter(a=>a.dias>0).length;
-  const zerados=age.filter(a=>a.dias===0).length;
+  const zerados=age.filter(a=>a.dias<=0).length;
   console.log(`[Aging KPI] contados: ${age.length} (0 dias: ${zerados} · +0 dias: ${parados}) de ${state.aging.length} na base`);
   const escopo = state.filtro.cliente==='TODOS' ? 'todos os clientes' : state.filtro.cliente;
+  const tAder = state.targets.aderencia;
   const K=[
     {c:'var(--cyan)', lbl:'Volume entrada', v:fmtNum(ent), sub:escopo},
     {c:'var(--green)',lbl:'Volume saída',   v:fmtNum(sai), sub:escopo},
-    {c:'var(--blue)', lbl:'Aderência saída', v:ader.toFixed(0)+'%', sub:'saída ÷ entrada'},
+    {c: corMeta(ader, tAder, 'var(--blue)'), lbl:'Aderência saída', v:ader.toFixed(0)+'%',
+     sub: tAder!=null ? `meta ${fmtNum(tAder)}%` : 'saída ÷ entrada'},
     {c:'var(--amber)',lbl:'Aging · 0 dias',  v:fmtNum(zerados), sub:'itens no prazo'},
     {c:'var(--red)',  lbl:'Aging · +0 dias', v:fmtNum(parados), sub:'itens parados'},
   ];
@@ -760,9 +816,39 @@ function volumeCard(cli){
   requestAnimationFrame(()=> makeVolumeChart(card.querySelector('canvas'), s));
   return card;
 }
+function makeVolumeChartSingle(canvas, s, tipo){
+  const sz=barSizing(s.labels.length);
+  const data = tipo==='entrada'? s.ent : s.sai;
+  const color = tipo==='entrada'? 'rgba(53,214,208,.9)' : 'rgba(63,208,127,.9)';
+  const ch=new Chart(canvas,{type:'bar',data:{labels:s.labels,datasets:[
+      {label: tipo==='entrada'?'Entrada':'Saída', data, backgroundColor:color, borderRadius:4,
+       maxBarThickness:sz.thick, categoryPercentage:Math.max(sz.cat,0.55), barPercentage:0.92}
+    ]}, options:volumeOpts()});
+  state.charts.push(ch); return ch;
+}
+function volumeCardSingle(cli, tipo){
+  const s=computeVolumeSeries(cli);
+  const total = tipo==='entrada'? s.totalE : s.totalS;
+  const corBadge = tipo==='entrada'? 'var(--cyan)' : 'var(--green)';
+  const card=document.createElement('div');
+  card.className='card'; card.style.setProperty('--c', tipo==='entrada'?'var(--cyan)':'var(--green)');
+  card.innerHTML=`
+    <div class="head">
+      <div class="who">${cli}</div>
+      <div class="mini"><span>${tipo==='entrada'?'Entrada':'Saída'}<b class="num" style="color:${corBadge}">${fmtNum(total)}</b></span></div>
+    </div>
+    <div class="chartbox"><canvas></canvas></div>`;
+  if(!s.labels.length){ card.querySelector('.chartbox').innerHTML='<div class="empty">Sem dados no filtro atual</div>'; return card; }
+  requestAnimationFrame(()=> makeVolumeChartSingle(card.querySelector('canvas'), s, tipo));
+  return card;
+}
 function renderVolume(){
-  const grid=document.getElementById('volGrid'); grid.innerHTML='';
-  clientesParaRenderizar().forEach(cli=> grid.appendChild(volumeCard(cli)));
+  const gEnt=document.getElementById('volEntGrid'), gSai=document.getElementById('volSaiGrid');
+  gEnt.innerHTML=''; gSai.innerHTML='';
+  clientesParaRenderizar().forEach(cli=>{
+    gEnt.appendChild(volumeCardSingle(cli,'entrada'));
+    gSai.appendChild(volumeCardSingle(cli,'saida'));
+  });
 }
 
 function makeAgingChart(canvas, cli, zero, pos){
@@ -784,7 +870,7 @@ function makeAgingChart(canvas, cli, zero, pos){
 }
 function agingCard(cli){
   const rows=state.aging.filter(r=>(cli==='—'||r.cliente===cli) && matchDate(r));
-  const zero=rows.filter(r=>r.dias===0), pos=rows.filter(r=>r.dias>0);
+  const zero=rows.filter(r=>r.dias<=0), pos=rows.filter(r=>r.dias>0);
   const card=document.createElement('div');
   card.className='card'; card.style.setProperty('--c', corCliente(cli));
   card.innerHTML=`
@@ -838,11 +924,12 @@ function prodOpts(){
   o.scales.y.ticks.callback=(v)=> fmtDec(v);
   return o;
 }
-function makeEntityChart(canvas, pairs, colorFn, onBarClick){
+function makeEntityChart(canvas, pairs, colorFn, onBarClick, target){
   const labels=pairs.map(p=>p[0]), data=pairs.map(p=>p[1]);
   const sz=barSizing(labels.length);
   const colors=pairs.map((p,i)=> colorFn(p[0], i));
   const opts=prodOpts();
+  if(target!=null) opts.plugins.targetLine={value:target};
   if(onBarClick){
     opts.onClick=(e,els)=>{ if(els.length) onBarClick(labels[els[0].index]); };
     opts.onHover=(e,els)=>{ e.native.target.style.cursor = els.length?'pointer':'default'; };
@@ -852,11 +939,13 @@ function makeEntityChart(canvas, pairs, colorFn, onBarClick){
     options:opts});
   state.charts.push(ch); return ch;
 }
-function makePeriodChart(canvas, labels, data, color){
+function makePeriodChart(canvas, labels, data, color, target){
   const sz=barSizing(labels.length);
+  const opts=prodOpts();
+  if(target!=null) opts.plugins.targetLine={value:target};
   const ch=new Chart(canvas,{type:'bar',data:{labels,datasets:[
       {data,backgroundColor:color,borderRadius:4,maxBarThickness:sz.thick,categoryPercentage:sz.cat,barPercentage:sz.bar}]},
-    options:prodOpts()});
+    options:opts});
   state.charts.push(ch); return ch;
 }
 function prodCard(title, sub, chartClass, buildFn, emptyMsg){
@@ -879,10 +968,11 @@ function renderProdKpis(){
   const pd=prodValue(d), pc=prodValue(c), pg=prodValue(d.concat(c));
   const escC = state.filtro.cliente==='TODOS'?'todos os clientes':state.filtro.cliente;
   const escR = state.filtro.rota==='TODOS'?'todas as rotas':state.filtro.rota;
+  const tD=state.targets.descarga, tC=state.targets.carregamento;
   const K=[
-    {c:'var(--cyan)',  lbl:'Produtividade descarga',    v:fmtDec(pd), sub:'volumes ÷ HH (Homem-Hora)'},
+    {c: corMeta(pd, tD, 'var(--cyan)'),  lbl:'Produtividade descarga',    v:fmtDec(pd), sub: tD!=null?`meta ${fmtDec(tD)} vol/HH`:'volumes ÷ HH'},
     {c:'var(--blue)',  lbl:'Operações descarga',        v:fmtNum(d.length), sub:escC},
-    {c:'var(--green)', lbl:'Produtividade carregamento', v:fmtDec(pc), sub:'volumes ÷ HH (Homem-Hora)'},
+    {c: corMeta(pc, tC, 'var(--green)'), lbl:'Produtividade carregamento', v:fmtDec(pc), sub: tC!=null?`meta ${fmtDec(tC)} vol/HH`:'volumes ÷ HH'},
     {c:'var(--violet)',lbl:'Operações carregamento',    v:fmtNum(c.length), sub:escR},
     {c:'var(--amber)', lbl:'Produtividade geral',       v:fmtDec(pg), sub:'descarga + carregamento'},
   ];
@@ -901,12 +991,12 @@ function renderDescarga(){
     {color:'var(--cyan)'},
     (cv)=>{ const pairs=prodByEntity(rows,'cliente'); if(!pairs.length) return false;
       makeEntityChart(cv, pairs, (name)=>corClienteHex(name),
-        (name)=>openProdModal(name, rows.filter(r=>r.cliente===name))); return true; },
+        (name)=>openProdModal(name, rows.filter(r=>r.cliente===name)), state.targets.descarga); return true; },
     'Sem dados de descarga no filtro'));
   grid.appendChild(prodCard('Por período', {label:'Produtividade',value:prod},
     {color:'var(--cyan)'},
     (cv)=>{ const p=prodByPeriod(rows); if(!p.labels.length) return false;
-      makePeriodChart(cv, p.labels, p.data, 'rgba(53,214,208,.85)'); return true; },
+      makePeriodChart(cv, p.labels, p.data, 'rgba(53,214,208,.85)', state.targets.descarga); return true; },
     'Sem dados de descarga no filtro'));
 }
 function renderCarregamento(){
@@ -919,12 +1009,12 @@ function renderCarregamento(){
     {color:'var(--green)'},
     (cv)=>{ const pairs=prodByEntity(rows,'rota'); if(!pairs.length) return false;
       makeEntityChart(cv, pairs, (name,i)=>corRota(name,i),
-        (name)=>openProdModal(name, rows.filter(r=>r.rota===name))); return true; },
+        (name)=>openProdModal(name, rows.filter(r=>r.rota===name)), state.targets.carregamento); return true; },
     'Sem dados de carregamento no filtro'));
   grid.appendChild(prodCard('Por período', {label:'Produtividade',value:prod},
     {color:'var(--green)'},
     (cv)=>{ const p=prodByPeriod(rows); if(!p.labels.length) return false;
-      makePeriodChart(cv, p.labels, p.data, 'rgba(63,208,127,.85)'); return true; },
+      makePeriodChart(cv, p.labels, p.data, 'rgba(63,208,127,.85)', state.targets.carregamento); return true; },
     'Sem dados de carregamento no filtro'));
 }
 
@@ -1049,7 +1139,7 @@ function tvVolumeKpis(cli){
   const ent=rows.reduce((s,r)=>s+r.entrada,0), sai=rows.reduce((s,r)=>s+r.saida,0);
   const ader=ent?(sai/ent*100):0;
   const ag=state.aging.filter(r=>(cli==='—'||r.cliente===cli)&&matchDate(r));
-  const z=ag.filter(a=>a.dias===0).length, p=ag.filter(a=>a.dias>0).length;
+  const z=ag.filter(a=>a.dias<=0).length, p=ag.filter(a=>a.dias>0).length;
   return [
     {c:'var(--cyan)', lbl:'Volume entrada', v:fmtNum(ent)},
     {c:'var(--green)',lbl:'Volume saída',   v:fmtNum(sai)},
