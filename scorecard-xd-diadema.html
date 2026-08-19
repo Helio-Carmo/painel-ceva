@@ -545,7 +545,8 @@ function parseAging(rows){
     return { cliente:cli||'—', id, date:d, ym:d?ymKey(d):'', dias:parseNum(diasTxt) };
   }).filter(Boolean);
   state.agingDropped = state.agingRead - state.aging.length;
-  console.log(`[Aging] ${state.agingRead} linhas lidas · ${state.aging.length} válidas · ${state.agingDropped} descartadas (vazias)`);
+  state.agingSemData = state.aging.filter(a=>!a.date).length;
+  console.log(`[Aging] ${state.agingRead} linhas lidas · ${state.aging.length} válidas · ${state.agingDropped} descartadas · ${state.agingSemData} sem data`);
 }
 // acha a linha de cabeçalho (planilhas têm linha de título "Descarga"/"Carregamento" antes)
 function findHeaderRow(rows){
@@ -651,7 +652,7 @@ function populateFilters(){
 }
 function matchDate(r){
   const f=state.filtro;
-  if(!r.date) return f.ano==='TODOS' && f.mes==='TODOS' && !f.de && !f.ate;
+  if(!r.date) return true;   // linha sem data válida sempre entra (não pode sumir da contagem)
   const t=r.date.getTime();
   if(f.de){ const d=parseDate(f.de); if(d && t < d.getTime()) return false; }
   if(f.ate){ const d=parseDate(f.ate); if(d){ d.setHours(23,59,59,999); if(t > d.getTime()) return false; } }
@@ -705,6 +706,7 @@ function renderKpis(){
   const ader= ent? (sai/ent*100):0;
   const parados=age.filter(a=>a.dias>0).length;
   const zerados=age.filter(a=>a.dias===0).length;
+  console.log(`[Aging KPI] contados: ${age.length} (0 dias: ${zerados} · +0 dias: ${parados}) de ${state.aging.length} na base`);
   const escopo = state.filtro.cliente==='TODOS' ? 'todos os clientes' : state.filtro.cliente;
   const K=[
     {c:'var(--cyan)', lbl:'Volume entrada', v:fmtNum(ent), sub:escopo},
