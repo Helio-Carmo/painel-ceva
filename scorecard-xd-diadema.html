@@ -444,8 +444,10 @@ const ymKey=(d)=> `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
 
 /* ================= LOAD ================= */
 function fetchCsv(sheet, id, directUrl){
+  let url = directUrl || csvUrl(sheet, id);
+  url += (url.includes('?')?'&':'?') + '_=' + Date.now();   // quebra-cache (dados frescos)
   return new Promise((resolve,reject)=>{
-    Papa.parse(directUrl || csvUrl(sheet, id), {
+    Papa.parse(url, {
       download:true, header:false, skipEmptyLines:true,
       complete:(r)=> resolve(r.data),
       error:(e)=> reject(e),
@@ -658,7 +660,7 @@ function render(){
     const per = state.filtro.periodo==='MES' ? 'mês' : 'dia';
     document.getElementById('volDesc').textContent = 'entrada × saída por '+per;
     const ad=document.getElementById('ageDesc');
-    if(ad) ad.textContent = `itens parados · ${fmtNum(state.aging.length)} na base · clique na barra para exportar`;
+    if(ad) ad.textContent = `${fmtNum(state.aging.length)} válidas de ${fmtNum(state.agingRead||state.aging.length)} lidas na base · clique na barra para exportar`;
     renderKpis(); renderVolume(); renderAging();
   }
   renderTvBar();
