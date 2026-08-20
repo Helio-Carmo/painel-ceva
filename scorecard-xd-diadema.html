@@ -129,7 +129,7 @@ input.sel::-webkit-calendar-picker-indicator{filter:invert(.65);cursor:pointer}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:16px}
 
 /* Volume: cada cliente é uma "dupla" (entrada | saída) */
-.volwrap{display:grid;grid-template-columns:1fr;gap:16px}
+.volwrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(720px,1fr));gap:16px}
 .volpair{display:grid;grid-template-columns:1fr 1fr;gap:14px;border:1px solid var(--line);
   border-radius:var(--radius);padding:14px;background:linear-gradient(180deg,rgba(255,255,255,.015),transparent)}
 .volpair .who-cli{grid-column:1 / -1;font-family:'Barlow Semi Condensed';font-weight:800;
@@ -846,55 +846,30 @@ function computeVolumeSeries(cli){
     const o=map.get(k); o.e+=r.entrada; o.s+=r.saida;
   });
   const entries=[...map.entries()].sort((a,b)=> porMes ? (a[0]<b[0]?-1:1) : (a[0]-b[0]));
-  const labels=[],ent=[],sai=[];
-  entries.forEach(([k,o])=>{
-    let lab;
-    if(porHora)     lab=`${fmtDate(o.d)} ${String(o.d.getHours()).padStart(2,'0')}h`;
-    else if(porMes) lab=MESES[o.d.getMonth()]+'/'+String(o.d.getFullYear()).slice(2);
-    else            lab=fmtDate(o.d);
-    labels.push(lab); ent.push(o.e); sai.push(o.s);
+  const dates=[],ent=[],sai=[];
+  entries.forEach(([k,o])=>{ dates.push(o.d); ent.push(o.e); sai.push(o.s); });
+  return {dates,ent,sai,totalE:ent.reduce((a,b)=>a+b,0),totalS:sai.reduce((a,b)=>a+b,0)};
+}
+// rótulos a partir das datas; inclui ano quando há mais de um ano (evita "07/08" duplicado)
+function volumeLabels(dates){
+  const per=state.filtro.periodo;
+  const multiAno = new Set(dates.map(d=>d.getFullYear())).size>1;
+  const yy=(d)=>'/'+String(d.getFullYear()).slice(2);
+  return dates.map(d=>{
+    if(per==='HORA') return `${fmtDate(d)}${multiAno?yy(d):''} ${String(d.getHours()).padStart(2,'0')}h`;
+    if(per==='MES')  return MESES[d.getMonth()]+yy(d);
+    return fmtDate(d) + (multiAno?yy(d):'');
   });
-  return {labels,ent,sai,totalE:ent.reduce((a,b)=>a+b,0),totalS:sai.reduce((a,b)=>a+b,0)};
-}
-function makeVolumeChart(canvas, s){
-  const sz=barSizing(s.labels.length);
-  const ch=new Chart(canvas,{type:'bar',data:{labels:s.labels,datasets:[
-      {label:'Entrada',data:s.ent,backgroundColor:'rgba(53,214,208,.85)',borderRadius:4,maxBarThickness:sz.thick,categoryPercentage:sz.cat,barPercentage:sz.bar},
-      {label:'Saída',data:s.sai,backgroundColor:'rgba(63,208,127,.85)',borderRadius:4,maxBarThickness:sz.thick,categoryPercentage:sz.cat,barPercentage:sz.bar},
-    ]}, options:volumeOpts()});
-  state.charts.push(ch); return ch;
-}
-function volumeCard(cli){
-  const s=computeVolumeSeries(cli);
-  const card=document.createElement('div');
-  card.className='card'; card.style.setProperty('--c', corCliente(cli));
-  card.innerHTML=`
-    <div class="head">
-      <div class="who">${cli}</div>
-      <div class="mini">
-        <span>Entrada<b class="num">${fmtNum(s.totalE)}</b></span>
-        <span>Saída<b class="num">${fmtNum(s.totalS)}</b></span>
-      </div>
-    </div>
-    <div class="chartbox"><canvas></canvas></div>
-    <div class="legend"><span><i style="background:var(--cyan)"></i>Entrada</span><span><i style="background:var(--green)"></i>Saída</span></div>`;
-  if(!s.labels.length){ card.querySelector('.chartbox').innerHTML='<div class="empty">Sem dados no filtro atual</div>'; return card; }
-  requestAnimationFrame(()=> makeVolumeChart(card.querySelector('canvas'), s));
-  return card;
-}
-function makeVolumeChartSingle(canvas, s, tipo){
-  const sz=barSizing(s.labels.length);
-  const data = tipo==='entrada'? s.ent : s.sai;
-  const color = tipo==='entrada'? 'rgba(53,214,208,.9)' : 'rgba(63,208,127,.9)';
-  const ch=new Chart(canvas,{type:'bar',data:{labels:s.labels,datasets:[
-      {label: tipo==='entrada'?'Entrada':'Saída', data, backgroundColor:color, borderRadius:4,
-       maxBarThickness:sz.thick, categoryPercentage:Math.max(sz.cat,0.55), barPercentage:0.92}
-    ]}, options:volumeOpts()});
-  state.charts.push(ch); return ch;
 }
 function volumeCardSingle(cli, tipo){
   const s=computeVolumeSeries(cli);
   const total = tipo==='entrada'? s.totalE : s.totalS;
+  const vals  = tipo==='entrada'? s.ent : s.sai;
+  // mantém só os períodos com valor (esconde dias sem nada)
+  const dts=[], dat=[];
+  s.dates.forEach((d,i)=>{ if((vals[i]||0)>0){ dts.push(d); dat.push(vals[i]); } });
+  const labels = volumeLabels(dts);
+  const color = tipo==='entrada'? 'rgba(53,214,208,.9)' : 'rgba(63,208,127,.9)';
   const corBadge = tipo==='entrada'? 'var(--cyan)' : 'var(--green)';
   const card=document.createElement('div');
   card.className='card'; card.style.setProperty('--c', tipo==='entrada'?'var(--cyan)':'var(--green)');
@@ -904,8 +879,15 @@ function volumeCardSingle(cli, tipo){
       <div class="mini"><span>${tipo==='entrada'?'Entrada':'Saída'}<b class="num" style="color:${corBadge}">${fmtNum(total)}</b></span></div>
     </div>
     <div class="chartbox"><canvas></canvas></div>`;
-  if(!s.labels.length){ card.querySelector('.chartbox').innerHTML='<div class="empty">Sem dados no filtro atual</div>'; return card; }
-  requestAnimationFrame(()=> makeVolumeChartSingle(card.querySelector('canvas'), s, tipo));
+  if(!labels.length){ card.querySelector('.chartbox').innerHTML='<div class="empty">Sem dados no filtro atual</div>'; return card; }
+  requestAnimationFrame(()=>{
+    const sz=barSizing(labels.length);
+    const ch=new Chart(card.querySelector('canvas'),{type:'bar',data:{labels,datasets:[
+        {label: tipo==='entrada'?'Entrada':'Saída', data:dat, backgroundColor:color, borderRadius:4,
+         maxBarThickness:sz.thick, categoryPercentage:Math.max(sz.cat,0.55), barPercentage:0.92}
+      ]}, options:volumeOpts()});
+    state.charts.push(ch);
+  });
   return card;
 }
 function renderVolume(){
