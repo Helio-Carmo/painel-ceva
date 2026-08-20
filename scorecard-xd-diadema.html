@@ -129,7 +129,7 @@ input.sel::-webkit-calendar-picker-indicator{filter:invert(.65);cursor:pointer}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:16px}
 
 /* Volume: cada cliente é uma "dupla" (entrada | saída) */
-.volwrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(720px,1fr));gap:16px}
+.volwrap{display:grid;grid-template-columns:1fr;gap:16px}
 .volpair{display:grid;grid-template-columns:1fr 1fr;gap:14px;border:1px solid var(--line);
   border-radius:var(--radius);padding:14px;background:linear-gradient(180deg,rgba(255,255,255,.015),transparent)}
 .volpair .who-cli{grid-column:1 / -1;font-family:'Barlow Semi Condensed';font-weight:800;
