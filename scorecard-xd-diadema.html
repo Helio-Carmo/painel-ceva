@@ -850,15 +850,13 @@ function computeVolumeSeries(cli){
   entries.forEach(([k,o])=>{ dates.push(o.d); ent.push(o.e); sai.push(o.s); });
   return {dates,ent,sai,totalE:ent.reduce((a,b)=>a+b,0),totalS:sai.reduce((a,b)=>a+b,0)};
 }
-// rótulos a partir das datas; inclui ano quando há mais de um ano (evita "07/08" duplicado)
+// rótulos a partir das datas (formato abreviado)
 function volumeLabels(dates){
   const per=state.filtro.periodo;
-  const multiAno = new Set(dates.map(d=>d.getFullYear())).size>1;
-  const yy=(d)=>'/'+String(d.getFullYear()).slice(2);
   return dates.map(d=>{
-    if(per==='HORA') return `${fmtDate(d)}${multiAno?yy(d):''} ${String(d.getHours()).padStart(2,'0')}h`;
-    if(per==='MES')  return MESES[d.getMonth()]+yy(d);
-    return fmtDate(d) + (multiAno?yy(d):'');
+    if(per==='HORA') return `${fmtDate(d)} ${String(d.getHours()).padStart(2,'0')}h`;
+    if(per==='MES')  return MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2);
+    return fmtDate(d);
   });
 }
 function volumeCardSingle(cli, tipo){
