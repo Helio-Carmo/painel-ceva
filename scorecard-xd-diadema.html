@@ -211,6 +211,11 @@ body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:8px}
 .tvbar .dots{display:flex;gap:7px;margin-left:auto}
 .tvbar .dots i{width:9px;height:9px;border-radius:50%;background:var(--line2)}
 .tvbar .dots i.on{background:var(--amber)}
+.tvexit{display:none}
+body.tv .tvexit{display:inline-flex;align-items:center;gap:6px;position:fixed;top:14px;right:18px;z-index:90;
+  background:rgba(255,91,82,.16);border:1px solid rgba(255,91,82,.45);color:#ff9089;
+  border-radius:10px;padding:9px 15px;font-weight:700;font-size:12px;letter-spacing:.06em;cursor:pointer}
+body.tv .tvexit:hover{background:rgba(255,91,82,.28)}
 
 @media (max-width:900px){
   .kpis{grid-template-columns:repeat(2,1fr)}
@@ -342,6 +347,7 @@ body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:8px}
 
     <!-- Palco do modo TV (auto-ajuste) -->
     <div id="tvStage" class="tvstage"></div>
+    <button id="btnTvExit" class="tvexit">✕ Sair da TV</button>
   </div>
 </div>
 
@@ -405,6 +411,9 @@ const COR = { EATON:'var(--blue)', GM:'var(--green)', _default:'var(--violet)' }
 const corCliente = (c) => COR[c] || COR._default;
 const COR_HEX = { EATON:'#4aa3ff', GM:'#3fd07f', _default:'#9d7bff' };
 const corClienteHex = (c)=> COR_HEX[c] || COR_HEX._default;
+const PALETA = ['#4aa3ff','#3fd07f','#ffb020','#9d7bff','#35d6d0','#ff5b52','#f97bd0','#7bd0ff','#ffd166','#8ac926'];
+// cor por dimensão (cliente/rota): fixa p/ conhecidos, paleta rotativa p/ novos
+const corDim = (name, i)=> COR_HEX[name] || PALETA[i % PALETA.length];
 try{ if(window.ChartDataLabels) Chart.register(window.ChartDataLabels); }catch(e){}
 // linha de meta (target) nos gráficos de produtividade
 const targetLinePlugin = {
@@ -438,8 +447,7 @@ const state = {
   charts: [],
   tv: { on:false, idx:0, timer:null },
 };
-const PALETA = ['#4aa3ff','#3fd07f','#ffb020','#9d7bff','#35d6d0','#ff5b52','#f97bd0','#7bd0ff'];
-const corRota = (r, i)=> PALETA[i % PALETA.length];
+const corRota = (r, i)=> corDim(r, i);
 
 /* ================= HELPERS ================= */
 const norm = (s)=> (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
@@ -641,7 +649,7 @@ function durHoras(kFrac,lFrac){
   let d=(lFrac-kFrac)%1; if(d<0) d+=1; return d*24;
 }
 // monta uma linha de produtividade só se passar no mesmo guardião da fórmula (F, K, L preenchidos e M>0)
-function linhaProd(r, iVol,iIni,iFim,iPes,dim,date){
+function linhaProd(r, iVol,iHora,iIni,iFim,iPes,dim, arrivalDate){
   const volTxt=(r[iVol]??'').toString().trim();
   const iniStr=(r[iIni]??'').toString().trim(), fimStr=(r[iFim]??'').toString().trim();
   const iniF=parseTimeFrac(iniStr), fimF=parseTimeFrac(fimStr);
@@ -649,6 +657,14 @@ function linhaProd(r, iVol,iIni,iFim,iPes,dim,date){
   if(volTxt==='' || iniF==null || fimF==null || pes<=0) return null;
   const h=durHoras(iniF,fimF);
   if(h==null || h<=0) return null;               // evita divisão por zero
+  // Data de referência = DIA DO INÍCIO REAL.
+  // Se o Início Real (hora) é anterior à Horário Chegada, o início virou a meia-noite → conta no dia seguinte.
+  let date = arrivalDate;
+  if(arrivalDate){
+    date = new Date(arrivalDate.getFullYear(),arrivalDate.getMonth(),arrivalDate.getDate());
+    const horaChegF = iHora>=0 ? parseTimeFrac(r[iHora]) : null;
+    if(horaChegF!=null && iniF < horaChegF) date.setDate(date.getDate()+1);
+  }
   return { date, ym:date?ymKey(date):'', vol:parseNum(volTxt), hours:h, pessoas:pes, dim, iniStr, fimStr };
 }
 function parseDescarga(rows){
@@ -657,12 +673,13 @@ function parseDescarga(rows){
   const iC=findCol(h,'Operação (Cliente)','Operação','Operacao','Cliente'),
         iD=findCol(h,'Data Chegada','Data_Chegada','DataChegada','Data'),
         iVol=findCol(h,'Qtd Vol.','Qtd Vol','Qtd. Vol','Volume'),
+        iHora=findCol(h,'Horário Chegada','Horario Chegada','Horário de Chegada','Hora Chegada'),
         iIni=findCol(h,'Inicio Real','Início Real','InicioReal'),
         iFim=findCol(h,'Termino Real','Término Real','TerminoReal'),
         iPes=findCol(h,'Qtd. Pessoas','Qtd Pessoas','Pessoas');
   state.descarga = rows.slice(hr+1).map(r=>{
     const cli=(r[iC]||'').toString().trim().toUpperCase(); if(!cli) return null;
-    const l=linhaProd(r,iVol,iIni,iFim,iPes,cli,parseDate(r[iD]));
+    const l=linhaProd(r,iVol,iHora,iIni,iFim,iPes,cli,parseDate(r[iD]));
     return l ? {cliente:cli, date:l.date, ym:l.ym, vol:l.vol, hours:l.hours, pessoas:l.pessoas, iniStr:l.iniStr, fimStr:l.fimStr} : null;
   }).filter(Boolean);
 }
@@ -672,12 +689,13 @@ function parseCarregamento(rows){
   const iR=findCol(h,'Rota'),
         iD=findCol(h,'Data Chegada','Data_Chegada','DataChegada','Data'),
         iVol=findCol(h,'Qtd Vol.','Qtd Vol','Qtd. Vol','Volume'),
+        iHora=findCol(h,'Horário Chegada','Horario Chegada','Horário de Chegada','Hora Chegada'),
         iIni=findCol(h,'Inicio Real','Início Real','InicioReal'),
         iFim=findCol(h,'Termino Real','Término Real','TerminoReal'),
         iPes=findCol(h,'Qtd. Pessoas','Qtd Pessoas','Pessoas');
   state.carregamento = rows.slice(hr+1).map(r=>{
     const rota=(r[iR]||'').toString().trim(); if(!rota) return null;
-    const l=linhaProd(r,iVol,iIni,iFim,iPes,rota,parseDate(r[iD]));
+    const l=linhaProd(r,iVol,iHora,iIni,iFim,iPes,rota,parseDate(r[iD]));
     return l ? {rota:rota, date:l.date, ym:l.ym, vol:l.vol, hours:l.hours, pessoas:l.pessoas, iniStr:l.iniStr, fimStr:l.fimStr} : null;
   }).filter(Boolean);
 }
@@ -1035,7 +1053,7 @@ function renderDescarga(){
   grid.appendChild(prodCard('Por cliente', {label:'Produtividade',value:prod},
     {color:'var(--cyan)'},
     (cv)=>{ const pairs=prodByEntity(rows,'cliente'); if(!pairs.length) return false;
-      makeEntityChart(cv, pairs, (name)=>corClienteHex(name),
+      makeEntityChart(cv, pairs, (name,i)=>corDim(name,i),
         (name)=>openProdModal(name, rows.filter(r=>r.cliente===name)), state.targets.descarga); return true; },
     'Sem dados de descarga no filtro'));
   grid.appendChild(prodCard('Por período', {label:'Produtividade',value:prod},
@@ -1174,7 +1192,10 @@ function openProdModal(entity, rows){
 /* ================= TV MODE (apresentação) ================= */
 function buildTvPages(){
   const pages=[];
-  state.volClientes.forEach(cli=> pages.push({kind:'vol', cliente:cli, label:'VOLUME · '+cli}));
+  state.volClientes.forEach(cli=>{
+    pages.push({kind:'vol', cliente:cli, label:'VOLUME · '+cli});
+    pages.push({kind:'aging', cliente:cli, label:'AGING · '+cli});
+  });
   if(state.descarga.length || state.carregamento.length) pages.push({kind:'prod', label:'PRODUTIVIDADE'});
   if(!pages.length) pages.push({kind:'vol', cliente:'—', label:'VOLUME'});
   return pages;
@@ -1188,7 +1209,7 @@ function tvVolumeKpis(cli){
   return [
     {c:'var(--cyan)', lbl:'Volume entrada', v:fmtNum(ent)},
     {c:'var(--green)',lbl:'Volume saída',   v:fmtNum(sai)},
-    {c:'var(--blue)', lbl:'Aderência saída',v:ader.toFixed(0)+'%'},
+    {c:corMeta(ader,state.targets.aderencia,'var(--blue)'), lbl:'Aderência saída',v:ader.toFixed(0)+'%'},
     {c:'var(--amber)',lbl:'Aging · 0 dias', v:fmtNum(z)},
     {c:'var(--red)',  lbl:'Aging · +0 dias',v:fmtNum(p)},
   ];
@@ -1196,9 +1217,9 @@ function tvVolumeKpis(cli){
 function tvProdKpis(){
   const d=state.descarga.filter(matchDate), c=state.carregamento.filter(matchDate);
   return [
-    {c:'var(--cyan)',  lbl:'Prod. descarga',    v:fmtDec(prodValue(d))},
+    {c:corMeta(prodValue(d),state.targets.descarga,'var(--cyan)'),  lbl:'Prod. descarga',    v:fmtDec(prodValue(d))},
     {c:'var(--blue)',  lbl:'Operações descarga',v:fmtNum(d.length)},
-    {c:'var(--green)', lbl:'Prod. carregamento',v:fmtDec(prodValue(c))},
+    {c:corMeta(prodValue(c),state.targets.carregamento,'var(--green)'), lbl:'Prod. carregamento',v:fmtDec(prodValue(c))},
     {c:'var(--violet)',lbl:'Operações carreg.',  v:fmtNum(c.length)},
     {c:'var(--amber)', lbl:'Prod. geral',       v:fmtDec(prodValue(d.concat(c)))},
   ];
@@ -1207,28 +1228,30 @@ function renderTV(){
   const stage=document.getElementById('tvStage'); stage.innerHTML='';
   const pages=buildTvPages();
   const page=pages[state.tv.idx % pages.length];
-  // faixa de KPIs compacta do slide atual
+  // KPIs compactos do slide
   const kdata = page.kind==='prod' ? tvProdKpis() : tvVolumeKpis(page.cliente);
   const kpiRow=document.createElement('div'); kpiRow.className='tvkpis';
   kpiRow.style.gridTemplateColumns=`repeat(${kdata.length},minmax(0,1fr))`;
   kpiRow.innerHTML=kdata.map(k=>`<div class="kpi" style="--c:${k.c}"><div class="lbl">${k.lbl}</div><div class="v num">${k.v}</div></div>`).join('');
   stage.appendChild(kpiRow);
+  // grade de gráficos
   const grid=document.createElement('div'); grid.className='tvgrid'; stage.appendChild(grid);
-
+  let cards=[];
   if(page.kind==='prod'){
     const d=state.descarga.filter(matchDate), c=state.carregamento.filter(matchDate);
-    grid.appendChild(prodCard('Descarga · por cliente',
-      {label:'Produtividade', value:fmtDec(prodValue(d))}, {color:'var(--cyan)'},
-      (cv)=>{ const p=prodByEntity(d,'cliente'); if(!p.length) return false; makeEntityChart(cv,p,(n)=>corClienteHex(n)); return true; },
-      'Sem dados de descarga'));
-    grid.appendChild(prodCard('Carregamento · por rota',
-      {label:'Produtividade', value:fmtDec(prodValue(c))}, {color:'var(--green)'},
-      (cv)=>{ const p=prodByEntity(c,'rota'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corRota(n,i)); return true; },
-      'Sem dados de carregamento'));
+    cards=[
+      prodCard('Descarga · por cliente', {label:'Produtividade', value:fmtDec(prodValue(d))}, {color:'var(--cyan)'},
+        (cv)=>{ const p=prodByEntity(d,'cliente'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corDim(n,i),null,state.targets.descarga); return true; }, 'Sem dados de descarga'),
+      prodCard('Carregamento · por rota', {label:'Produtividade', value:fmtDec(prodValue(c))}, {color:'var(--green)'},
+        (cv)=>{ const p=prodByEntity(c,'rota'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corRota(n,i),null,state.targets.carregamento); return true; }, 'Sem dados de carregamento'),
+    ];
+  }else if(page.kind==='aging'){
+    cards=[ agingCard(page.cliente) ];
   }else{
-    grid.appendChild(volumeCard(page.cliente));
-    grid.appendChild(agingCard(page.cliente));
+    cards=[ volumeCardSingle(page.cliente,'entrada'), volumeCardSingle(page.cliente,'saida') ];
   }
+  grid.style.gridTemplateColumns=`repeat(${cards.length},minmax(0,1fr))`;
+  cards.forEach(c=> grid.appendChild(c));
 }
 function renderTvBar(){
   const spot=document.getElementById('tvSpot'), dots=document.getElementById('tvDots');
@@ -1350,10 +1373,15 @@ document.getElementById('btnHoje').addEventListener('click',()=>{
   populateFilters(); render();
 });
 document.getElementById('btnTv').addEventListener('click',toggleTv);
+document.getElementById('btnTvExit').addEventListener('click',toggleTv);
 document.getElementById('btnClose').addEventListener('click',closeModal);
 document.getElementById('overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeModal();});
 document.getElementById('btnExport').addEventListener('click',exportXlsx);
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  if(document.getElementById('overlay').classList.contains('show')) closeModal();
+  else if(state.tv.on) toggleTv();
+});
 
 /* ================= BOOT ================= */
 tickClock(); setInterval(tickClock,1000);
