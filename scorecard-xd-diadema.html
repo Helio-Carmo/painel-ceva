@@ -447,7 +447,7 @@ const state = {
   view: 'volumes',
   demo: false,
   showLabels: true,
-  targets: { aderencia:null, descarga:null, carregamento:null },
+  targets: {},   // metas por cliente: { GERAL:{aderencia,descarga,carregamento}, GM:{...}, ... }
   charts: [],
   tv: { on:false, idx:0, timer:null },
 };
@@ -579,15 +579,29 @@ async function loadData(){
     banner(true);
   }
 }
+function colsSaida(h){
+  return {
+    d0: findCol(h,'Saída_D0','Saida_D0','Saída D0','Saida D0','SaidaD0','D0'),
+    d1: findCol(h,'Saída_D+1','Saida_D+1','Saída D+1','Saida D+1','D+1'),
+    d2: findCol(h,'Saída_D+2_ou_mais','Saida_D+2_ou_mais','Saída_D+2','Saida_D+2','Saída D+2','D+2'),
+    sTot: findCol(h,'Volume_Saida','Volume Saída','Saida','Saída')
+  };
+}
+function saidaFrom(r, cs){
+  const d0=parseNum(r[cs.d0]), d1=parseNum(r[cs.d1]), d2=parseNum(r[cs.d2]);
+  const temSplit = cs.d0>=0 || cs.d1>=0 || cs.d2>=0;
+  const saida = temSplit ? (d0+d1+d2) : parseNum(r[cs.sTot]);
+  return { saida, d0, d1, d2 };
+}
 function parseAgregado(rows){
   const h=rows[0];
   const iD=findCol(h,'Data'), iO=findCol(h,'Operação','Operacao','Cliente'),
-        iE=findCol(h,'Volume_Entrada','Volume Entrada','Entrada'),
-        iS=findCol(h,'Volume_Saida','Volume Saída','Saida','Saída');
+        iE=findCol(h,'Volume_Entrada','Volume Entrada','Entrada'), cs=colsSaida(h);
   state.agregado = rows.slice(1).map(r=>{
     const d=parseDate(r[iD]); if(!d) return null;
+    const sd=saidaFrom(r,cs);
     return { date:d, ym:ymKey(d), cliente:(r[iO]||'?').toString().trim().toUpperCase(),
-             entrada:parseNum(r[iE]), saida:parseNum(r[iS]) };
+             entrada:parseNum(r[iE]), saida:sd.saida, d0:sd.d0, d1:sd.d1, d2:sd.d2 };
   }).filter(Boolean);
 }
 function parseHorario(rows){
@@ -595,12 +609,12 @@ function parseHorario(rows){
   const h=rows[0];
   const iD=findCol(h,'Data e Hora','Data_Hora','DataHora','Data'),
         iO=findCol(h,'Operação','Operacao','Cliente'),
-        iE=findCol(h,'Volume_Entrada','Volume Entrada','Entrada'),
-        iS=findCol(h,'Volume_Saida','Volume Saída','Saida','Saída');
+        iE=findCol(h,'Volume_Entrada','Volume Entrada','Entrada'), cs=colsSaida(h);
   state.horario = rows.slice(1).map(r=>{
     const d=parseDateTime(r[iD]); if(!d) return null;
+    const sd=saidaFrom(r,cs);
     return { date:d, ym:ymKey(d), cliente:(r[iO]||'?').toString().trim().toUpperCase(),
-             entrada:parseNum(r[iE]), saida:parseNum(r[iS]) };
+             entrada:parseNum(r[iE]), saida:sd.saida, d0:sd.d0, d1:sd.d1, d2:sd.d2 };
   }).filter(Boolean);
 }
 function parseAging(rows){
@@ -703,20 +717,39 @@ function parseCarregamento(rows){
     return l ? {rota:rota, date:l.date, ym:l.ym, vol:l.vol, hours:l.hours, pessoas:l.pessoas, iniStr:l.iniStr, fimStr:l.fimStr} : null;
   }).filter(Boolean);
 }
+// Setup: colunas Cliente | Atividade | Target. Guarda meta por cliente e usa GERAL como padrão.
 function parseSetup(rows){
-  const t={aderencia:null, descarga:null, carregamento:null};
-  (rows||[]).forEach(row=>{
-    for(let j=0;j<row.length;j++){
-      const key=norm(row[j]); if(!key) continue;
-      const val=row[j+1];
-      if(key.includes('aderencia')) t.aderencia=parseNum(val);
-      else if(key==='descarga') t.descarga=parseNum(val);
-      else if(key==='carregamento') t.carregamento=parseNum(val);
-    }
+  const H = (rows && rows[0]) ? rows[0].map(norm) : [];
+  let iCli = H.findIndex(h=>h.includes('cliente')||h==='operacao');
+  let iAtv = H.findIndex(h=>h.includes('atividade'));
+  let iTgt = H.findIndex(h=>h.includes('target')||h.includes('meta'));
+  const body = (iCli>=0||iAtv>=0||iTgt>=0) ? rows.slice(1) : (rows||[]);
+  // fallback: se não achou cabeçalho, assume as 3 primeiras colunas
+  if(iCli<0) iCli=0; if(iAtv<0) iAtv=1; if(iTgt<0) iTgt=2;
+  const chave=(atv)=>{ const a=norm(atv);
+    if(a.includes('aderencia')) return 'aderencia';
+    if(a==='descarga') return 'descarga';
+    if(a==='carregamento') return 'carregamento';
+    return null; };
+  const t={}; // t[cliente][metrica] = valor
+  body.forEach(row=>{
+    const cli=(row[iCli]||'').toString().trim().toUpperCase();
+    const met=chave(row[iAtv]);
+    if(!cli || !met) return;
+    let v=parseNum(row[iTgt]);
+    if(met==='aderencia' && v>0 && v<=1) v*=100; // 0,98 -> 98
+    (t[cli]=t[cli]||{})[met]=v;
   });
-  if(t.aderencia!=null && t.aderencia>0 && t.aderencia<=1) t.aderencia*=100; // 0,98 -> 98%
   state.targets=t;
-  console.log('[Setup] metas:', t);
+  console.log('[Setup] metas por cliente:', t);
+}
+// meta de uma métrica para um cliente (cai em GERAL se não houver específica)
+function metaDe(metrica, cliente){
+  const t=state.targets||{};
+  const c=(cliente||'').toString().toUpperCase();
+  if(c && c!=='TODOS' && t[c] && t[c][metrica]!=null) return t[c][metrica];
+  if(t['GERAL'] && t['GERAL'][metrica]!=null) return t['GERAL'][metrica];
+  return null;
 }
 function corMeta(valor, meta, corPadrao){
   if(meta==null || isNaN(meta)) return corPadrao;
@@ -815,7 +848,7 @@ function renderKpis(){
   const zerados=age.filter(a=>a.dias<=0).length;
   console.log(`[Aging KPI] contados: ${age.length} (0 dias: ${zerados} · +0 dias: ${parados}) de ${state.aging.length} na base`);
   const escopo = state.filtro.cliente==='TODOS' ? 'todos os clientes' : state.filtro.cliente;
-  const tAder = state.targets.aderencia;
+  const tAder = metaDe('aderencia', state.filtro.cliente);
   const K=[
     {c:'var(--cyan)', lbl:'Volume entrada', v:fmtNum(ent), sub:escopo},
     {c:'var(--green)',lbl:'Volume saída',   v:fmtNum(sai), sub:escopo},
@@ -842,13 +875,13 @@ function computeVolumeSeries(cli){
     if(porHora)      k=new Date(d.getFullYear(),d.getMonth(),d.getDate(),d.getHours()).getTime();
     else if(porMes)  k=ymKey(d);
     else             k=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();
-    if(!map.has(k)) map.set(k,{e:0,s:0,d});
-    const o=map.get(k); o.e+=r.entrada; o.s+=r.saida;
+    if(!map.has(k)) map.set(k,{e:0,s:0,d0:0,d1:0,d2:0,d});
+    const o=map.get(k); o.e+=r.entrada; o.s+=r.saida; o.d0+=(r.d0||0); o.d1+=(r.d1||0); o.d2+=(r.d2||0);
   });
   const entries=[...map.entries()].sort((a,b)=> porMes ? (a[0]<b[0]?-1:1) : (a[0]-b[0]));
-  const dates=[],ent=[],sai=[];
-  entries.forEach(([k,o])=>{ dates.push(o.d); ent.push(o.e); sai.push(o.s); });
-  return {dates,ent,sai,totalE:ent.reduce((a,b)=>a+b,0),totalS:sai.reduce((a,b)=>a+b,0)};
+  const dates=[],ent=[],sai=[],d0=[],d1=[],d2=[];
+  entries.forEach(([k,o])=>{ dates.push(o.d); ent.push(o.e); sai.push(o.s); d0.push(o.d0); d1.push(o.d1); d2.push(o.d2); });
+  return {dates,ent,sai,d0,d1,d2,totalE:ent.reduce((a,b)=>a+b,0),totalS:sai.reduce((a,b)=>a+b,0)};
 }
 // rótulos a partir das datas (formato abreviado)
 function volumeLabels(dates){
@@ -861,29 +894,65 @@ function volumeLabels(dates){
 }
 function volumeCardSingle(cli, tipo){
   const s=computeVolumeSeries(cli);
-  const total = tipo==='entrada'? s.totalE : s.totalS;
-  const vals  = tipo==='entrada'? s.ent : s.sai;
-  // mantém só os períodos com valor (esconde dias sem nada)
-  const dts=[], dat=[];
-  s.dates.forEach((d,i)=>{ if((vals[i]||0)>0){ dts.push(d); dat.push(vals[i]); } });
-  const labels = volumeLabels(dts);
-  const color = tipo==='entrada'? 'rgba(53,214,208,.9)' : 'rgba(63,208,127,.9)';
   const corBadge = tipo==='entrada'? 'var(--cyan)' : 'var(--green)';
   const card=document.createElement('div');
   card.className='card'; card.style.setProperty('--c', tipo==='entrada'?'var(--cyan)':'var(--green)');
+
+  if(tipo==='entrada'){
+    const dts=[], dat=[];
+    s.dates.forEach((d,i)=>{ if((s.ent[i]||0)>0){ dts.push(d); dat.push(s.ent[i]); } });
+    const labels=volumeLabels(dts);
+    card.innerHTML=`
+      <div class="head"><div class="who">${cli}</div>
+        <div class="mini"><span>Entrada<b class="num" style="color:${corBadge}">${fmtNum(s.totalE)}</b></span></div>
+      </div>
+      <div class="chartbox"><canvas></canvas></div>`;
+    if(!labels.length){ card.querySelector('.chartbox').innerHTML='<div class="empty">Sem dados no filtro atual</div>'; return card; }
+    requestAnimationFrame(()=>{
+      const sz=barSizing(labels.length);
+      const ch=new Chart(card.querySelector('canvas'),{type:'bar',data:{labels,datasets:[
+          {label:'Entrada', data:dat, backgroundColor:'rgba(53,214,208,.9)', borderRadius:4,
+           maxBarThickness:sz.thick, categoryPercentage:Math.max(sz.cat,0.55), barPercentage:0.92}
+        ]}, options:volumeOpts()});
+      state.charts.push(ch);
+    });
+    return card;
+  }
+
+  // ===== SAÍDA: empilhado D+0 (verde) / D+1 (amarelo) / D+2+ (vermelho) =====
+  const dts=[], a0=[], a1=[], a2=[];
+  s.dates.forEach((d,i)=>{ const soma=(s.d0[i]||0)+(s.d1[i]||0)+(s.d2[i]||0);
+    if(soma>0){ dts.push(d); a0.push(s.d0[i]||0); a1.push(s.d1[i]||0); a2.push(s.d2[i]||0); } });
+  const labels=volumeLabels(dts);
   card.innerHTML=`
-    <div class="head">
-      <div class="who">${cli}</div>
-      <div class="mini"><span>${tipo==='entrada'?'Entrada':'Saída'}<b class="num" style="color:${corBadge}">${fmtNum(total)}</b></span></div>
+    <div class="head"><div class="who">${cli}</div>
+      <div class="mini"><span>Saída<b class="num" style="color:${corBadge}">${fmtNum(s.totalS)}</b></span></div>
     </div>
-    <div class="chartbox"><canvas></canvas></div>`;
+    <div class="chartbox"><canvas></canvas></div>
+    <div class="legend">
+      <span><i style="background:var(--green)"></i>D+0</span>
+      <span><i style="background:var(--amber)"></i>D+1</span>
+      <span><i style="background:var(--red)"></i>D+2 ou mais</span>
+    </div>`;
   if(!labels.length){ card.querySelector('.chartbox').innerHTML='<div class="empty">Sem dados no filtro atual</div>'; return card; }
   requestAnimationFrame(()=>{
     const sz=barSizing(labels.length);
+    const o=volumeOpts();
+    o.scales.x.stacked=true; o.scales.y.stacked=true;
+    o.plugins.datalabels={
+      display:(ctx)=> state.showLabels && (ctx.dataset.data[ctx.dataIndex]||0)>0 ? 'auto' : false,
+      anchor:'center', align:'center', color:'#08121a',
+      font:{family:'Inter', weight:'700', size:8},
+      formatter:(v)=> v>=1000 ? (v/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})+'k' : fmtNum(v)
+    };
+    o.plugins.tooltip.callbacks={ label:(c)=>` ${c.dataset.label}: ${fmtNum(c.parsed.y)}` };
+    const ds=(lab,data,cor)=>({label:lab, data, backgroundColor:cor, stack:'saida', borderRadius:2,
+      maxBarThickness:sz.thick, categoryPercentage:Math.max(sz.cat,0.55), barPercentage:0.92});
     const ch=new Chart(card.querySelector('canvas'),{type:'bar',data:{labels,datasets:[
-        {label: tipo==='entrada'?'Entrada':'Saída', data:dat, backgroundColor:color, borderRadius:4,
-         maxBarThickness:sz.thick, categoryPercentage:Math.max(sz.cat,0.55), barPercentage:0.92}
-      ]}, options:volumeOpts()});
+        ds('D+0', a0, 'rgba(63,208,127,.92)'),
+        ds('D+1', a1, 'rgba(255,176,32,.92)'),
+        ds('D+2 ou mais', a2, 'rgba(255,91,82,.92)'),
+      ]}, options:o});
     state.charts.push(ch);
   });
   return card;
@@ -1016,7 +1085,7 @@ function renderProdKpis(){
   const pd=prodValue(d), pc=prodValue(c), pg=prodValue(d.concat(c));
   const escC = state.filtro.cliente==='TODOS'?'todos os clientes':state.filtro.cliente;
   const escR = state.filtro.rota==='TODOS'?'todas as rotas':state.filtro.rota;
-  const tD=state.targets.descarga, tC=state.targets.carregamento;
+  const tD=metaDe('descarga', state.filtro.cliente), tC=metaDe('carregamento', state.filtro.cliente);
   const K=[
     {c: corMeta(pd, tD, 'var(--cyan)'),  lbl:'Produtividade descarga',    v:fmtDec(pd), sub: tD!=null?`meta ${fmtDec(tD)} vol/HH`:'volumes ÷ HH'},
     {c:'var(--blue)',  lbl:'Operações descarga',        v:fmtNum(d.length), sub:escC},
@@ -1039,12 +1108,12 @@ function renderDescarga(){
     {color:'var(--cyan)'},
     (cv)=>{ const pairs=prodByEntity(rows,'cliente'); if(!pairs.length) return false;
       makeEntityChart(cv, pairs, (name,i)=>corDim(name,i),
-        (name)=>openProdModal(name, rows.filter(r=>r.cliente===name)), state.targets.descarga); return true; },
+        (name)=>openProdModal(name, rows.filter(r=>r.cliente===name)), metaDe('descarga', state.filtro.cliente)); return true; },
     'Sem dados de descarga no filtro'));
   grid.appendChild(prodCard('Por período', {label:'Produtividade',value:prod},
     {color:'var(--cyan)'},
     (cv)=>{ const p=prodByPeriod(rows); if(!p.labels.length) return false;
-      makePeriodChart(cv, p.labels, p.data, 'rgba(53,214,208,.85)', state.targets.descarga); return true; },
+      makePeriodChart(cv, p.labels, p.data, 'rgba(53,214,208,.85)', metaDe('descarga', state.filtro.cliente)); return true; },
     'Sem dados de descarga no filtro'));
 }
 function renderCarregamento(){
@@ -1057,12 +1126,12 @@ function renderCarregamento(){
     {color:'var(--green)'},
     (cv)=>{ const pairs=prodByEntity(rows,'rota'); if(!pairs.length) return false;
       makeEntityChart(cv, pairs, (name,i)=>corRota(name,i),
-        (name)=>openProdModal(name, rows.filter(r=>r.rota===name)), state.targets.carregamento); return true; },
+        (name)=>openProdModal(name, rows.filter(r=>r.rota===name)), metaDe('carregamento', state.filtro.cliente)); return true; },
     'Sem dados de carregamento no filtro'));
   grid.appendChild(prodCard('Por período', {label:'Produtividade',value:prod},
     {color:'var(--green)'},
     (cv)=>{ const p=prodByPeriod(rows); if(!p.labels.length) return false;
-      makePeriodChart(cv, p.labels, p.data, 'rgba(63,208,127,.85)', state.targets.carregamento); return true; },
+      makePeriodChart(cv, p.labels, p.data, 'rgba(63,208,127,.85)', metaDe('carregamento', state.filtro.cliente)); return true; },
     'Sem dados de carregamento no filtro'));
 }
 
@@ -1191,7 +1260,7 @@ function tvVolumeKpis(cli){
   return [
     {c:'var(--cyan)', lbl:'Volume entrada', v:fmtNum(ent)},
     {c:'var(--green)',lbl:'Volume saída',   v:fmtNum(sai)},
-    {c:corMeta(ader,state.targets.aderencia,'var(--blue)'), lbl:'Aderência saída',v:ader.toFixed(0)+'%'},
+    {c:corMeta(ader,metaDe('aderencia',cli),'var(--blue)'), lbl:'Aderência saída',v:ader.toFixed(0)+'%'},
     {c:'var(--amber)',lbl:'Aging · 0 dias', v:fmtNum(z)},
     {c:'var(--red)',  lbl:'Aging · +0 dias',v:fmtNum(p)},
   ];
@@ -1199,9 +1268,9 @@ function tvVolumeKpis(cli){
 function tvProdKpis(){
   const d=state.descarga.filter(matchDate), c=state.carregamento.filter(matchDate);
   return [
-    {c:corMeta(prodValue(d),state.targets.descarga,'var(--cyan)'),  lbl:'Prod. descarga',    v:fmtDec(prodValue(d))},
+    {c:corMeta(prodValue(d),metaDe('descarga',null),'var(--cyan)'),  lbl:'Prod. descarga',    v:fmtDec(prodValue(d))},
     {c:'var(--blue)',  lbl:'Operações descarga',v:fmtNum(d.length)},
-    {c:corMeta(prodValue(c),state.targets.carregamento,'var(--green)'), lbl:'Prod. carregamento',v:fmtDec(prodValue(c))},
+    {c:corMeta(prodValue(c),metaDe('carregamento',null),'var(--green)'), lbl:'Prod. carregamento',v:fmtDec(prodValue(c))},
     {c:'var(--violet)',lbl:'Operações carreg.',  v:fmtNum(c.length)},
     {c:'var(--amber)', lbl:'Prod. geral',       v:fmtDec(prodValue(d.concat(c)))},
   ];
@@ -1221,9 +1290,9 @@ function renderTV(){
     const grid=document.createElement('div'); grid.className='tvgrid'; stage.appendChild(grid);
     const d=state.descarga.filter(matchDate), c=state.carregamento.filter(matchDate);
     grid.appendChild(prodCard('Descarga · por cliente', {label:'Produtividade', value:fmtDec(prodValue(d))}, {color:'var(--cyan)'},
-      (cv)=>{ const p=prodByEntity(d,'cliente'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corDim(n,i),null,state.targets.descarga); return true; }, 'Sem dados de descarga'));
+      (cv)=>{ const p=prodByEntity(d,'cliente'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corDim(n,i),null,metaDe('descarga',null)); return true; }, 'Sem dados de descarga'));
     grid.appendChild(prodCard('Carregamento · por rota', {label:'Produtividade', value:fmtDec(prodValue(c))}, {color:'var(--green)'},
-      (cv)=>{ const p=prodByEntity(c,'rota'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corRota(n,i),null,state.targets.carregamento); return true; }, 'Sem dados de carregamento'));
+      (cv)=>{ const p=prodByEntity(c,'rota'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corRota(n,i),null,metaDe('carregamento',null)); return true; }, 'Sem dados de carregamento'));
   }else{
     // uma página por cliente: entrada | saída em cima, aging (largura toda) embaixo
     const wrap=document.createElement('div'); wrap.className='tvclient'; stage.appendChild(wrap);
@@ -1274,7 +1343,9 @@ function loadDemo(){
     ['2026-08-01','EATON',1980,1750],['2026-08-01','GM',540,420],
     ['2026-08-05','EATON',2110,1900],['2026-08-05','GM',720,610],
   ];
-  state.agregado = A.map(([d,c,e,s])=>{const dt=parseDate(d);return{date:dt,ym:ymKey(dt),cliente:c,entrada:e,saida:s};});
+  state.agregado = A.map(([d,c,e,s])=>{const dt=parseDate(d);
+    const d0=Math.round(s*0.7), d1=Math.round(s*0.2), d2=s-d0-d1;
+    return{date:dt,ym:ymKey(dt),cliente:c,entrada:e,saida:s,d0,d1,d2};});
   const mkAge=(cli,pref,n,dias,dt)=>Array.from({length:n},(_,i)=>({cliente:cli,id:pref+String(1000+i),date:parseDate(dt),ym:ymKey(parseDate(dt)),dias}));
   state.aging = [
     ...mkAge('EATON','3565468800223-',22,6,'2026-08-07'),
@@ -1291,7 +1362,9 @@ function loadDemo(){
       if(hh%6===0) H.push([`${dia} ${String(hh).padStart(2,'0')}:00`,'GM', Math.round(20+Math.random()*250), Math.round(10+Math.random()*200)]);
     });
   });
-  state.horario = H.map(([dt,c,e,s])=>{const d=parseDateTime(dt);return{date:d,ym:ymKey(d),cliente:c,entrada:e,saida:s};});
+  state.horario = H.map(([dt,c,e,s])=>{const d=parseDateTime(dt);
+    const d0=Math.round(s*0.7), d1=Math.round(s*0.2), d2=s-d0-d1;
+    return{date:d,ym:ymKey(d),cliente:c,entrada:e,saida:s,d0,d1,d2};});
 }
 function loadDemoProd(){
   // [dimensão, data, vol, início, término, pessoas]
