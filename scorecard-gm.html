@@ -189,13 +189,15 @@ body.tv.sa .slide-ind i:nth-child(1),body.tv.sb .slide-ind i:nth-child(2){backgr
   text-transform:uppercase;font-weight:600}
 
 /* ---------- ondas board ---------- */
-.wave{display:grid;grid-template-columns:minmax(150px,auto) repeat(4,1fr);gap:0;align-items:center;
+.wave{display:grid;grid-template-columns:minmax(210px,auto) repeat(4,1fr);gap:0;align-items:center;
   border-top:1px solid var(--line);padding:9px 0;font-size:12px}
 .wave.head{border-top:none;padding-bottom:8px}
 .wave.head span{font-family:var(--cond);font-weight:600;font-size:11px;letter-spacing:1px;
   text-transform:uppercase;color:var(--faint)}
 .wave-name{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--ink)}
 .wave-dot{width:11px;height:11px;border-radius:3px;flex:none}
+.wl-placa{font-family:var(--mono);font-weight:600;font-size:11px;letter-spacing:1px;color:var(--amber);
+  background:#0f1620;border:1px solid var(--line2);border-radius:5px;padding:1px 6px;margin-left:6px}
 .wave .t{font-family:var(--mono);font-weight:500;color:var(--muted)}
 .wave .t.ok{color:var(--good)} .wave .t.no{color:var(--faint)}
 
@@ -484,9 +486,10 @@ function renderOndas(rows){
     const col=r.COR_HEX||WAVE_COLORS[nm]||"var(--faint)";
     const cic=num(r.CICLO);
     const badge=cic>1?` <span style="color:var(--faint);font-size:10px">·${cic}</span>`:"";
+    const placa=r.PLACA?` <span class="wl-placa">${r.PLACA}</span>`:"";
     const cell=v=>{const t=dtHora(v);return t?`<span class="t ok">${t}</span>`:`<span class="t no">—</span>`;};
     h+=`<div class="wave">
-      <span class="wave-name"><span class="wave-dot" style="background:${col}"></span>${nm}${badge}</span>
+      <span class="wave-name"><span class="wave-dot" style="background:${col}"></span>${nm}${badge}${placa}</span>
       ${cell(r.HORA_CONTROLE_CARREGAMENTO)}${cell(r.HORA_NF_GM)}${cell(r["EMISSÃO_CTE"]||r.EMISSAO_CTE)}${cell(r.HORA_VEICULO_EXPEDIDO)}
     </div>`;
   });
