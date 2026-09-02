@@ -223,6 +223,35 @@ body.tv .tvbar{display:flex;align-items:center;gap:14px;margin-bottom:8px}
 .tvbar .dots i{width:9px;height:9px;border-radius:50%;background:var(--line2)}
 .tvbar .dots i.on{background:var(--amber)}
 .tvexit{display:none}
+
+/* ===== Plano de Ação ===== */
+.planotools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 2px 12px;flex-wrap:wrap}
+.planotable-wrap{overflow:auto}
+table.planotable td, table.planotable th{white-space:nowrap}
+table.planotable td.wrap{white-space:normal;max-width:340px}
+.stbadge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.st-nao{background:rgba(133,147,168,.18);color:#b9c4d4}
+.st-and{background:rgba(74,163,255,.16);color:#7fbcff}
+.st-con{background:rgba(63,208,127,.16);color:#5fe0a0}
+.st-atr{background:rgba(255,91,82,.16);color:#ff8f88}
+.rowbtn{border:0;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;width:28px;height:28px;cursor:pointer;font-size:14px;line-height:1}
+.detrow td{background:rgba(255,255,255,.02)}
+.detgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 22px;padding:6px 2px}
+.detgrid div{font-size:13px}
+.detgrid b{color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:2px}
+.det-obs{grid-column:1/-1;color:#ffd57a}
+
+/* formulário */
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;padding:6px 0 4px}
+.fld{display:flex;flex-direction:column;gap:5px}
+.fld.full{grid-column:1 / -1}
+.fld span{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.fld input,.fld textarea,.fld select{background:var(--panel);border:1px solid var(--line);color:var(--text);
+  border-radius:10px;padding:9px 11px;font-size:13px;font-family:inherit;resize:vertical}
+.fld input:focus,.fld textarea:focus,.fld select:focus{outline:2px solid var(--blue);outline-offset:1px}
+.formactions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+.paerro{color:#ff8f88;font-size:12px;min-height:16px;margin-top:6px}
+@media (max-width:640px){ .formgrid{grid-template-columns:1fr} .detgrid{grid-template-columns:1fr} }
 body.tv .tvexit{display:inline-flex;align-items:center;gap:6px;position:fixed;top:14px;right:18px;z-index:90;
   background:rgba(255,91,82,.16);border:1px solid rgba(255,91,82,.45);color:#ff9089;
   border-radius:10px;padding:9px 15px;font-weight:700;font-size:12px;letter-spacing:.06em;cursor:pointer}
@@ -252,6 +281,10 @@ body.tv .tvexit:hover{background:rgba(255,91,82,.28)}
       <button class="navitem" data-view="prod">
         <svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
         Produt.
+      </button>
+      <button class="navitem" data-view="plano">
+        <svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
+        Plano
       </button>
     </nav>
   </aside>
@@ -352,6 +385,30 @@ body.tv .tvexit:hover{background:rgba(255,91,82,.28)}
     <!-- Palco do modo TV (auto-ajuste) -->
     <div id="tvStage" class="tvstage"></div>
     <button id="btnTvExit" class="tvexit">✕ Sair da TV</button>
+
+    <!-- ===== VIEW: PLANO DE AÇÃO ===== -->
+    <div id="viewPlano" class="view" hidden>
+      <section class="kpis" id="kpisPlano"></section>
+      <div class="planotools">
+        <div class="eyebrow" style="--c:var(--violet)">
+          <span class="tag">Plano de Ação</span>
+          <span class="desc" id="planoDesc">pendentes seguem aparecendo até serem concluídos</span>
+        </div>
+        <button id="btnAddPlano" class="btn amber">+ Adicionar Plano de Ação</button>
+      </div>
+      <div class="grid" id="planoCharts" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))"></div>
+      <div class="card" style="margin-top:16px">
+        <div class="planotable-wrap">
+          <table class="data planotable" id="planoTable">
+            <thead><tr>
+              <th style="width:34px"></th><th>Cliente</th><th>Ação</th><th>Responsável</th>
+              <th>Data Final</th><th>Status</th><th style="width:80px"></th>
+            </tr></thead>
+            <tbody id="planoBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -373,6 +430,39 @@ body.tv .tvexit:hover{background:rgba(255,91,82,.28)}
         <thead id="mHead"></thead>
         <tbody id="mBody"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal formulário Plano de Ação -->
+<div class="overlay" id="planoOverlay">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(680px,100%)">
+    <div class="mhead">
+      <div><div class="mt" id="planoFormTitle">Novo plano de ação</div>
+        <div class="ms" id="planoFormSub"></div></div>
+      <div class="mactions"><button class="iconbtn" id="planoFormClose" aria-label="Fechar">✕</button></div>
+    </div>
+    <div class="mbody">
+      <div class="formgrid">
+        <label class="fld"><span>Cliente *</span><input id="paCliente" list="paClienteList"></label>
+        <datalist id="paClienteList"></datalist>
+        <label class="fld"><span>Status *</span>
+          <select id="paStatus" class="sel">
+            <option>Não Iniciado</option><option>Em Andamento</option><option>Concluído</option>
+          </select></label>
+        <label class="fld full"><span>Problema *</span><textarea id="paProblema" rows="2"></textarea></label>
+        <label class="fld full"><span>Causa *</span><textarea id="paCausa" rows="2"></textarea></label>
+        <label class="fld full"><span>Ação *</span><textarea id="paAcao" rows="2"></textarea></label>
+        <label class="fld"><span>Responsável *</span><input id="paResp"></label>
+        <label class="fld"><span>Data Início *</span><input type="date" id="paInicio" class="sel"></label>
+        <label class="fld"><span>Data Final *</span><input type="date" id="paFinal" class="sel"></label>
+        <label class="fld full" id="paObsWrap"><span>Observações</span><textarea id="paObs" rows="2"></textarea></label>
+      </div>
+      <div id="paErro" class="paerro"></div>
+      <div class="formactions">
+        <button class="btn ghost" id="paCancelar">Cancelar</button>
+        <button class="btn amber" id="paSalvar">Salvar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -400,6 +490,8 @@ const CONFIG = {
   // Bases grandes / sempre ao vivo: cole a URL /exec do Apps Script (retorna a aba em JSON).
   // É a forma mais confiável (não trunca nem defasa). Tem prioridade sobre o CSV abaixo.
   AGING_JSON_URL: '',
+  // Plano de Ação (leitura e gravação via Apps Script). Se vazio, usa a mesma URL do aging.
+  PLANO_URL: '',
   // Alternativa: link CSV de "Publicar na web" da aba de Aging (usado só se AGING_JSON_URL estiver vazio).
   AGING_CSV_URL: '',
 
@@ -441,7 +533,7 @@ try{ Chart.register(targetLinePlugin); }catch(e){}
 
 /* ================= ESTADO ================= */
 const state = {
-  agregado: [], horario: [], aging: [], descarga: [], carregamento: [],
+  agregado: [], horario: [], aging: [], descarga: [], carregamento: [], planos: [],
   volClientes: [], volAnos: [], prodClientes: [], rotas: [], prodAnos: [],
   filtro: { cliente:'TODOS', rota:'TODOS', ano:'TODOS', mes:'TODOS', periodo:'DIA', de:'', ate:'' },
   view: 'volumes',
@@ -568,6 +660,7 @@ async function loadData(){
     const setup = await fetchCsv(CONFIG.SHEET_SETUP);
     parseSetup(setup||[]);
   }catch(err){ console.warn('Falha ao ler Setup (metas):', err); }
+  await loadPlano();
   buildDerived();
   populateFilters();
   render();
@@ -777,12 +870,17 @@ function buildDerived(){
 
 /* ================= FILTROS ================= */
 function populateFilters(){
-  const prod = state.view==='prod';
-  const clientes = prod ? state.prodClientes : state.volClientes;
-  const anos     = prod ? state.prodAnos     : state.volAnos;
+  const prod = state.view==='prod', plano = state.view==='plano';
+  let clientes, anos;
+  if(plano){
+    clientes=[...new Set(state.planos.map(p=>p.cliente).filter(Boolean))].sort();
+    anos=[...new Set(state.planos.map(p=>{const d=parseDate(p.final);return d?d.getFullYear():null;}).filter(Boolean))].sort((a,b)=>b-a);
+  }else{
+    clientes = prod ? state.prodClientes : state.volClientes;
+    anos     = prod ? state.prodAnos     : state.volAnos;
+  }
   const fc=document.getElementById('fCliente'), fa=document.getElementById('fAno'),
         fm=document.getElementById('fMes'), fr=document.getElementById('fRota');
-  // reconcilia seleções que não existem mais na view atual
   if(state.filtro.cliente!=='TODOS' && !clientes.includes(state.filtro.cliente)) state.filtro.cliente='TODOS';
   if(state.filtro.ano!=='TODOS' && !anos.map(String).includes(String(state.filtro.ano))) state.filtro.ano='TODOS';
   if(state.filtro.rota!=='TODOS' && !state.rotas.includes(state.filtro.rota)) state.filtro.rota='TODOS';
@@ -818,12 +916,21 @@ function clientesParaRenderizar(){
 function clearCharts(){ state.charts.forEach(c=>{try{c.destroy()}catch(e){}}); state.charts=[]; }
 
 function syncViewUI(){
+  const plano = state.view==='plano';
   document.body.classList.toggle('view-prod', state.view==='prod');
+  document.body.classList.toggle('view-plano', plano);
   document.getElementById('viewVolumes').hidden = state.view!=='volumes';
   document.getElementById('viewProd').hidden = state.view!=='prod';
+  document.getElementById('viewPlano').hidden = !plano;
   document.querySelectorAll('.navitem').forEach(b=> b.classList.toggle('on', b.dataset.view===state.view));
-  document.getElementById('subTitle').textContent = state.view==='prod'
-    ? 'Torre de Controle · Produtividade' : 'Torre de Controle · Cross Docking Diadema';
+  document.getElementById('subTitle').textContent =
+    state.view==='prod' ? 'Torre de Controle · Produtividade' :
+    plano ? 'Torre de Controle · Plano de Ação' : 'Torre de Controle · Cross Docking Diadema';
+  // controles que não se aplicam ao Plano de Ação
+  document.getElementById('periodo').style.display = plano?'none':'';
+  document.getElementById('btnLabels').style.display = plano?'none':'';
+  document.getElementById('fDe').closest('.selwrap').style.display = plano?'none':'';
+  document.getElementById('fAte').closest('.selwrap').style.display = plano?'none':'';
 }
 
 function render(){
@@ -832,6 +939,8 @@ function render(){
   if(state.tv.on){ renderTV(); renderTvBar(); return; }
   if(state.view==='prod'){
     renderProdKpis(); renderDescarga(); renderCarregamento();
+  }else if(state.view==='plano'){
+    renderPlano();
   }else{
     const per = state.filtro.periodo==='MES' ? 'mês' : (state.filtro.periodo==='HORA' ? 'hora' : 'dia');
     const esc = state.filtro.cliente==='TODOS'?'todos os clientes':state.filtro.cliente;
@@ -1140,6 +1249,177 @@ function renderCarregamento(){
     'Sem dados de carregamento no filtro'));
 }
 
+/* ================= PLANO DE AÇÃO ================= */
+const planoUrl = ()=> CONFIG.PLANO_URL || CONFIG.AGING_JSON_URL;
+const esc = (s)=> (s||'').toString().replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const fmtBR = (iso)=>{ const d=parseDate(iso); return d? `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` : (iso||''); };
+const isConcluido = (s)=> norm(s)==='concluido';
+function planoAtrasado(p){ if(isConcluido(p.status)) return false; const d=parseDate(p.final); if(!d) return false; const t=new Date(); t.setHours(0,0,0,0); return d.getTime()<t.getTime(); }
+
+async function loadPlano(){
+  try{
+    const url=planoUrl(); if(!url){ state.planos=[]; return; }
+    const u = url + (url.includes('?')?'&':'?') + 'recurso=plano_acao&_=' + Date.now();
+    const res = await fetch(u, {cache:'no-store'});
+    const rows = await res.json();
+    parsePlano(Array.isArray(rows)?rows:[]);
+    console.log('[Plano] carregados:', state.planos.length);
+  }catch(e){ console.warn('Falha ao ler Plano_Acao:', e); }
+}
+function parsePlano(rows){
+  if(!rows || rows.length<2){ state.planos=[]; return; }
+  const h=rows[0].map(norm);
+  const idx=(n)=>{ const k=norm(n); let i=h.indexOf(k); if(i<0) i=h.findIndex(x=>x.includes(k)); return i; };
+  const iId=idx('ID'),iCli=idx('Cliente'),iPro=idx('Problema'),iCau=idx('Causa'),iAca=idx('Acao'),
+        iResp=idx('Responsavel'),iIni=idx('DataInicio'),iFim=idx('DataFinal'),iSt=idx('Status'),iObs=idx('Observacoes');
+  const dstr=(v)=>{ const d=parseDate(v); return d? isoDate(d) : (v||'').toString().slice(0,10); };
+  state.planos = rows.slice(1).map(r=>({
+    id:(r[iId]||'').toString().trim(),
+    cliente:(r[iCli]||'').toString().trim(),
+    problema:(r[iPro]||'').toString(), causa:(r[iCau]||'').toString(), acao:(r[iAca]||'').toString(),
+    resp:(r[iResp]||'').toString(), inicio:dstr(r[iIni]), final:dstr(r[iFim]),
+    status:(r[iSt]||'').toString().trim(), obs:(r[iObs]||'').toString()
+  })).filter(p=>p.id||p.cliente||p.acao);
+}
+function filtPlanos(){
+  const f=state.filtro, now=new Date();
+  return state.planos.filter(p=>{
+    if(f.cliente!=='TODOS' && norm(p.cliente)!==norm(f.cliente)) return false;
+    if(f.mes==='TODOS') return true;
+    const fAno = f.ano==='TODOS'? now.getFullYear() : +f.ano;
+    const fMes = +f.mes;
+    const isCurrent = (fAno===now.getFullYear() && fMes===now.getMonth()+1);
+    const df=parseDate(p.final);
+    const inMonth = df && df.getFullYear()===fAno && (df.getMonth()+1)===fMes;
+    const pend = !isConcluido(p.status);
+    return inMonth || (pend && isCurrent);   // pendentes seguem no mês atual
+  });
+}
+
+let planoView=[];
+function renderPlano(){
+  const list=filtPlanos(); planoView=list;
+  renderPlanoKpis(list); renderPlanoCharts(list); renderPlanoTable(list);
+  document.getElementById('planoDesc').textContent = state.filtro.mes==='TODOS'
+    ? 'todos os planos'
+    : 'planos do mês + pendentes arrastados de meses anteriores';
+}
+function stCount(list){
+  return { ni:list.filter(p=>norm(p.status)==='naoiniciado').length,
+           ea:list.filter(p=>norm(p.status)==='emandamento').length,
+           co:list.filter(p=>isConcluido(p.status)).length,
+           atr:list.filter(planoAtrasado).length };
+}
+function renderPlanoKpis(list){
+  const c=stCount(list);
+  const K=[
+    {c:'var(--violet)',lbl:'Total no filtro',v:fmtNum(list.length),sub:'planos'},
+    {c:'var(--muted)', lbl:'Não iniciado',   v:fmtNum(c.ni), sub:''},
+    {c:'var(--blue)',  lbl:'Em andamento',   v:fmtNum(c.ea), sub:''},
+    {c:'var(--green)', lbl:'Concluído',      v:fmtNum(c.co), sub:''},
+    {c:'var(--red)',   lbl:'Atrasados',      v:fmtNum(c.atr),sub:'pendentes vencidos'},
+  ];
+  document.getElementById('kpisPlano').innerHTML = K.map(k=>`
+    <div class="kpi" style="--c:${k.c}"><div class="lbl">${k.lbl}</div><div class="v num">${k.v}</div><div class="sub">${k.sub}</div></div>`).join('');
+}
+function planoChartCard(title, build){
+  const card=document.createElement('div'); card.className='card'; card.style.setProperty('--c','var(--violet)');
+  card.innerHTML=`<div class="head"><div class="who">${title}</div></div><div class="chartbox small"><canvas></canvas></div>`;
+  requestAnimationFrame(()=> build(card.querySelector('canvas')));
+  return card;
+}
+function planoBar(canvas, labels, data, colors){
+  const ch=new Chart(canvas,{type:'bar',data:{labels,datasets:[{data,backgroundColor:colors,borderRadius:6,maxBarThickness:90}]},
+    options:{...baseChartOpts(), plugins:{legend:{display:false},tooltip:tooltipCfg(),
+      datalabels:{display:()=>state.showLabels,anchor:'end',align:'top',color:'#e7edf5',
+        font:{family:'Barlow Semi Condensed',weight:'800',size:15},formatter:(v)=>fmtNum(v)}}}});
+  state.charts.push(ch);
+}
+function renderPlanoCharts(list){
+  const wrap=document.getElementById('planoCharts'); wrap.innerHTML='';
+  const c=stCount(list);
+  wrap.appendChild(planoChartCard('Por status', cv=>planoBar(cv,
+    ['Não Iniciado','Em Andamento','Concluído'], [c.ni,c.ea,c.co],
+    ['rgba(133,147,168,.8)','rgba(74,163,255,.85)','rgba(63,208,127,.9)'])));
+  const pend=list.filter(p=>!isConcluido(p.status)); const atr=pend.filter(planoAtrasado).length;
+  wrap.appendChild(planoChartCard('Prazo (pendentes)', cv=>planoBar(cv,
+    ['No prazo','Atrasado'], [pend.length-atr, atr], ['rgba(63,208,127,.9)','rgba(255,91,82,.9)'])));
+}
+function planoStatusBadge(p){
+  const cls = isConcluido(p.status)?'st-con': norm(p.status)==='emandamento'?'st-and':'st-nao';
+  let b=`<span class="stbadge ${cls}">${esc(p.status)||'—'}</span>`;
+  if(planoAtrasado(p)) b+=` <span class="stbadge st-atr">ATRASADO</span>`;
+  return b;
+}
+function renderPlanoTable(list){
+  const tb=document.getElementById('planoBody');
+  tb.innerHTML = list.length ? list.map((p,i)=>`
+    <tr data-i="${i}">
+      <td><button class="rowbtn" data-exp="${i}">+</button></td>
+      <td>${esc(p.cliente)||'—'}</td>
+      <td class="wrap">${esc(p.acao)||'—'}</td>
+      <td>${esc(p.resp)||'—'}</td>
+      <td>${p.final?fmtBR(p.final):'—'}</td>
+      <td>${planoStatusBadge(p)}</td>
+      <td><button class="rowbtn" data-edit="${i}" title="Editar">✎</button></td>
+    </tr>`).join('') : '<tr><td colspan="7" class="empty">Nenhum plano no filtro atual</td></tr>';
+}
+function togglePlanoDetail(btn){
+  const tr=btn.closest('tr'); const i=+tr.dataset.i; const nxt=tr.nextElementSibling;
+  if(nxt && nxt.classList.contains('detrow')){ nxt.remove(); btn.textContent='+'; return; }
+  const p=planoView[i]; const det=document.createElement('tr'); det.className='detrow';
+  det.innerHTML=`<td colspan="7"><div class="detgrid">
+    <div><b>Problema</b>${esc(p.problema)||'—'}</div>
+    <div><b>Causa</b>${esc(p.causa)||'—'}</div>
+    <div><b>Ação</b>${esc(p.acao)||'—'}</div>
+    <div><b>Responsável</b>${esc(p.resp)||'—'}</div>
+    <div><b>Data Início</b>${fmtBR(p.inicio)||'—'}</div>
+    <div><b>Data Final</b>${fmtBR(p.final)||'—'}${planoAtrasado(p)?' ⚠️':''}</div>
+    ${p.obs?`<div class="det-obs"><b>Observações</b>${esc(p.obs)}</div>`:''}
+  </div></td>`;
+  tr.after(det); btn.textContent='−';
+}
+
+/* ---- modal add/edit ---- */
+let planoEdit=null;
+function openPlanoForm(p){
+  planoEdit=p||null;
+  document.getElementById('paClienteList').innerHTML =
+    [...new Set([...state.volClientes, ...state.planos.map(x=>x.cliente)].filter(Boolean))].map(c=>`<option>${c}</option>`).join('');
+  document.getElementById('planoFormTitle').textContent = p?'Editar plano de ação':'Novo plano de ação';
+  const set=(id,v)=>document.getElementById(id).value=v||'';
+  set('paCliente',p&&p.cliente); document.getElementById('paStatus').value = p&&p.status ? p.status : 'Não Iniciado';
+  set('paProblema',p&&p.problema); set('paCausa',p&&p.causa); set('paAcao',p&&p.acao);
+  set('paResp',p&&p.resp); set('paInicio', p? p.inicio : isoDate(new Date())); set('paFinal',p&&p.final); set('paObs',p&&p.obs);
+  document.getElementById('paErro').textContent='';
+  document.getElementById('planoOverlay').classList.add('show');
+}
+function closePlanoForm(){ document.getElementById('planoOverlay').classList.remove('show'); }
+async function salvarPlano(){
+  const g=(id)=>document.getElementById(id).value.trim();
+  const cliente=g('paCliente'),problema=g('paProblema'),causa=g('paCausa'),acao=g('paAcao'),
+        resp=g('paResp'),inicio=g('paInicio'),final=g('paFinal'),status=document.getElementById('paStatus').value;
+  const falta=[];
+  if(!cliente)falta.push('Cliente'); if(!problema)falta.push('Problema'); if(!causa)falta.push('Causa');
+  if(!acao)falta.push('Ação'); if(!resp)falta.push('Responsável'); if(!inicio)falta.push('Data Início'); if(!final)falta.push('Data Final');
+  if(falta.length){ document.getElementById('paErro').textContent='Preencha: '+falta.join(', '); return; }
+  let obs=g('paObs');
+  if(planoEdit && planoEdit.final && planoEdit.final!==final){
+    const nota=`Data final alterada de ${fmtBR(planoEdit.final)} para ${fmtBR(final)} em ${fmtBR(isoDate(new Date()))}`;
+    obs = obs ? (obs+' | '+nota) : nota;
+  }
+  const payload={ recurso:'plano_acao', ID: planoEdit?planoEdit.id:'',
+    Cliente:cliente,Problema:problema,Causa:causa,Acao:acao,Responsavel:resp,
+    DataInicio:inicio,DataFinal:final,Status:status,Observacoes:obs };
+  const btn=document.getElementById('paSalvar'); btn.disabled=true; btn.textContent='Salvando…';
+  try{
+    await fetch(planoUrl(), {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload)});
+    await loadPlano(); populateFilters(); closePlanoForm(); render();
+  }catch(e){
+    document.getElementById('paErro').textContent='Erro ao salvar. Confira a implantação do Apps Script (acesso "Qualquer pessoa").';
+  }finally{ btn.disabled=false; btn.textContent='Salvar'; }
+}
+
 function baseChartOpts(){
   const grid='rgba(255,255,255,.05)', tick='#8593a8';
   return {responsive:true,maintainAspectRatio:false,
@@ -1434,8 +1714,20 @@ document.getElementById('btnTvExit').addEventListener('click',toggleTv);
 document.getElementById('btnClose').addEventListener('click',closeModal);
 document.getElementById('overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeModal();});
 document.getElementById('btnExport').addEventListener('click',exportXlsx);
+
+// Plano de Ação
+document.getElementById('btnAddPlano').addEventListener('click',()=>openPlanoForm(null));
+document.getElementById('planoFormClose').addEventListener('click',closePlanoForm);
+document.getElementById('paCancelar').addEventListener('click',closePlanoForm);
+document.getElementById('paSalvar').addEventListener('click',salvarPlano);
+document.getElementById('planoOverlay').addEventListener('click',e=>{ if(e.target.id==='planoOverlay') closePlanoForm(); });
+document.getElementById('planoBody').addEventListener('click',e=>{
+  const exp=e.target.closest('[data-exp]'); if(exp){ togglePlanoDetail(exp); return; }
+  const ed=e.target.closest('[data-edit]'); if(ed){ openPlanoForm(planoView[+ed.dataset.edit]); }
+});
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape') return;
+  if(document.getElementById('planoOverlay').classList.contains('show')){ closePlanoForm(); return; }
   if(document.getElementById('overlay').classList.contains('show')) closeModal();
   else if(state.tv.on) toggleTv();
 });
