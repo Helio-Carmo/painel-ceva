@@ -810,9 +810,16 @@ function parseCarregamento(rows){
     return l ? {rota:rota, date:l.date, ym:l.ym, vol:l.vol, hours:l.hours, pessoas:l.pessoas, iniStr:l.iniStr, fimStr:l.fimStr} : null;
   }).filter(Boolean);
   const sv=state.carregamento.reduce((s,r)=>s+r.vol,0), shh=state.carregamento.reduce((s,r)=>s+r.hours*r.pessoas,0);
+  const vols=state.carregamento.map(r=>r.vol), hrs=state.carregamento.map(r=>r.hours), pes=state.carregamento.map(r=>r.pessoas);
+  const mm=(a)=>a.length?`min ${Math.min(...a)} / max ${Math.max(...a)}`:'—';
+  const ruins=state.carregamento.filter(r=>!(r.vol>=0)|| !(r.hours>0) || !(r.pessoas>0) || r.pessoas>200 || r.hours>24);
+  const piores=state.carregamento.slice().sort((a,b)=>(b.hours*b.pessoas)-(a.hours*a.pessoas)).slice(0,5)
+    .map(r=>({rota:r.rota,data:r.date&&isoDate(r.date),vol:r.vol,horas:+r.hours.toFixed(2),pessoas:r.pessoas,HH:+(r.hours*r.pessoas).toFixed(1)}));
   console.log('[Carregamento] colunas → Vol:',iVol,'Hora:',iHora,'Ini:',iIni,'Fim:',iFim,'Pes:',iPes,
-    '| linhas válidas:',state.carregamento.length,'| ΣVol:',Math.round(sv),'| ΣHH:',shh.toFixed(1),
-    '| prod:',(shh>0?(sv/shh).toFixed(2):'—'), '| exemplo:',state.carregamento[0]);
+    '| linhas:',state.carregamento.length,'| ΣVol:',Math.round(sv),'| ΣHH:',shh.toFixed(1),
+    '| prod:',(shh>0?(sv/shh).toFixed(2):'—'));
+  console.log('[Carregamento] Vol('+mm(vols)+') Horas('+mm(hrs)+') Pessoas('+mm(pes)+') | suspeitas:',ruins.length);
+  console.table(piores);
 }
 // Setup: colunas Cliente | Atividade | Target. Guarda meta por cliente e usa GERAL como padrão.
 function parseSetup(rows){
@@ -1126,10 +1133,17 @@ function renderAging(){
 // Produtividade de um conjunto de linhas = Vol_somado / (Horas_somadas × Pessoas_somadas)
 // (a "linha somada": soma volume, soma durações e soma pessoas, e aplica a fórmula)
 function prodValue(rows){
-  let vol=0,hrs=0,ppl=0,ph=0;
-  rows.forEach(r=>{ const v=+r.vol||0, h=+r.hours||0, p=+r.pessoas||0;
-    vol+=v; hrs+=h; ppl+=p; ph+=h*p; });
-  const den = CONFIG.PROD_CALC==='pessoa_hora' ? ph : (hrs*ppl);
+  let vol=0, den=0, descartadas=0;
+  rows.forEach(r=>{
+    const v=+r.vol, h=+r.hours, p=+r.pessoas;
+    const hp = h*p;
+    // só entra na conta se tudo for número finito, hora-pessoa > 0 e a duração for plausível (<= 24h)
+    if(Number.isFinite(v) && v>=0 && Number.isFinite(hp) && hp>0 && h>0 && h<=24 && p>0 && p<=200){
+      vol += v;
+      den += (CONFIG.PROD_CALC==='pessoa_hora' ? hp : h*p);
+    } else { descartadas++; }
+  });
+  if(descartadas) console.warn('[prodValue] linhas ignoradas (inválidas ou duração > 24h):', descartadas);
   return den>0 ? vol/den : 0;
 }
 function prodByEntity(rows, key){
