@@ -605,15 +605,19 @@ function fetchCsv(sheet, id, directUrl){
 }
 // lê a aba pelo Apps Script (/exec) — retorna array de arrays (linha 0 = cabeçalho)
 async function fetchJsonRows(url){
-  const u = url + (url.includes('?')?'&':'?') + '_=' + Date.now();
-  const res = await fetch(u, {redirect:'follow', cache:'no-store'});
-  if(!res.ok) throw new Error('HTTP '+res.status);
-  const txt = await res.text();
-  let data;
-  try{ data = JSON.parse(txt); }
-  catch(e){ throw new Error('resposta não-JSON (provável tela de login do Apps Script)'); }
-  if(!Array.isArray(data)) throw new Error('formato inesperado');
-  return data;
+  let ultimoErro;
+  for(let tentativa=0; tentativa<3; tentativa++){
+    try{
+      const u = url + (url.includes('?')?'&':'?') + '_=' + Date.now() + '_' + tentativa;
+      const res = await fetch(u, {redirect:'follow', cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const txt = await res.text();
+      const data = JSON.parse(txt);
+      if(!Array.isArray(data)) throw new Error('formato inesperado');
+      return data;
+    }catch(e){ ultimoErro=e; await new Promise(r=>setTimeout(r, 400*(tentativa+1))); }
+  }
+  throw ultimoErro || new Error('falha ao ler');
 }
 // tenta ler o aging na ordem: Apps Script -> CSV publicado -> gviz; registra a fonte usada
 async function loadAging(){
@@ -1273,9 +1277,7 @@ function planoAtrasado(p){ if(isConcluido(p.status)) return false; const d=parse
 async function loadPlano(){
   try{
     const url=planoUrl(); if(!url){ state.planos=[]; return; }
-    const u = url + (url.includes('?')?'&':'?') + 'recurso=plano_acao&_=' + Date.now();
-    const res = await fetch(u, {cache:'no-store'});
-    const rows = await res.json();
+    const rows = await fetchJsonRows(url + (url.includes('?')?'&':'?') + 'recurso=plano_acao');
     parsePlano(Array.isArray(rows)?rows:[]);
     console.log('[Plano] carregados:', state.planos.length);
   }catch(e){ console.warn('Falha ao ler Plano_Acao:', e); }
@@ -1427,13 +1429,32 @@ async function salvarPlano(){
     DataInicio:inicio,DataFinal:final,Status:status,Observacoes:obs };
   const btn=document.getElementById('paSalvar'); btn.disabled=true; btn.textContent='Salvando…';
   try{
-    await fetch(planoUrl(), {method:'POST', mode:'no-cors',
-      headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload)});
-    await new Promise(r=>setTimeout(r,600));   // dá um tempinho pro Sheets gravar
+    await enviarPlanoForm(payload);          // POST via form oculto (não depende de CORS/redirect)
+    await new Promise(r=>setTimeout(r,1500)); // tempo pro Apps Script gravar
     await loadPlano(); populateFilters(); closePlanoForm(); render();
   }catch(e){
     document.getElementById('paErro').textContent='Erro de conexão ao salvar. Confira o PLANO_URL e a implantação do Apps Script.';
   }finally{ btn.disabled=false; btn.textContent='Salvar'; }
+}
+// envia o payload por um <form> num iframe oculto — o navegador entrega sem CORS nem redirect a seguir
+function enviarPlanoForm(payload){
+  return new Promise((resolve,reject)=>{
+    try{
+      const nome='pa_ifr_'+Date.now();
+      const ifr=document.createElement('iframe'); ifr.name=nome; ifr.style.display='none';
+      document.body.appendChild(ifr);
+      const form=document.createElement('form');
+      form.action=planoUrl(); form.method='POST'; form.target=nome; form.style.display='none';
+      const inp=document.createElement('input');
+      inp.type='hidden'; inp.name='payload'; inp.value=JSON.stringify(payload);
+      form.appendChild(inp); document.body.appendChild(form);
+      let done=false;
+      const finish=()=>{ if(done) return; done=true; setTimeout(()=>{ ifr.remove(); form.remove(); }, 500); resolve(); };
+      ifr.addEventListener('load', finish);
+      form.submit();
+      setTimeout(finish, 4000); // fallback: segue mesmo sem evento de load
+    }catch(e){ reject(e); }
+  });
 }
 
 function baseChartOpts(){
