@@ -716,6 +716,10 @@ function parseCarregamento(rows){
     const l=linhaProd(r,iVol,iHora,iIni,iFim,iPes,rota,parseDate(r[iD]));
     return l ? {rota:rota, date:l.date, ym:l.ym, vol:l.vol, hours:l.hours, pessoas:l.pessoas, iniStr:l.iniStr, fimStr:l.fimStr} : null;
   }).filter(Boolean);
+  const sv=state.carregamento.reduce((s,r)=>s+r.vol,0), shh=state.carregamento.reduce((s,r)=>s+r.hours*r.pessoas,0);
+  console.log('[Carregamento] colunas → Vol:',iVol,'Hora:',iHora,'Ini:',iIni,'Fim:',iFim,'Pes:',iPes,
+    '| linhas válidas:',state.carregamento.length,'| ΣVol:',Math.round(sv),'| ΣHH:',shh.toFixed(1),
+    '| prod:',(shh>0?(sv/shh).toFixed(2):'—'), '| exemplo:',state.carregamento[0]);
 }
 // Setup: colunas Cliente | Atividade | Target. Guarda meta por cliente e usa GERAL como padrão.
 function parseSetup(rows){
@@ -1014,7 +1018,8 @@ function renderAging(){
 // (a "linha somada": soma volume, soma durações e soma pessoas, e aplica a fórmula)
 function prodValue(rows){
   let vol=0,hrs=0,ppl=0,ph=0;
-  rows.forEach(r=>{ vol+=r.vol; hrs+=r.hours; ppl+=r.pessoas; ph+=r.hours*r.pessoas; });
+  rows.forEach(r=>{ const v=+r.vol||0, h=+r.hours||0, p=+r.pessoas||0;
+    vol+=v; hrs+=h; ppl+=p; ph+=h*p; });
   const den = CONFIG.PROD_CALC==='pessoa_hora' ? ph : (hrs*ppl);
   return den>0 ? vol/den : 0;
 }
