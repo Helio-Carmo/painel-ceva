@@ -607,9 +607,8 @@ function fetchCsv(sheet, id, directUrl){
 // lê a aba pelo Apps Script (/exec) — retorna array de arrays (linha 0 = cabeçalho)
 async function fetchJsonRows(url){
   let ultimoErro;
-  for(let tentativa=0; tentativa<5; tentativa++){
+  for(let tentativa=0; tentativa<3; tentativa++){
     try{
-      // cada tentativa com sufixo único força um novo redirect (evita repetir o 404 do endereço temporário)
       const u = url + (url.includes('?')?'&':'?') + 'cb=' + Date.now() + Math.random().toString(36).slice(2);
       const res = await fetch(u, {redirect:'follow', cache:'no-store'});
       if(!res.ok) throw new Error('HTTP '+res.status);
@@ -617,46 +616,53 @@ async function fetchJsonRows(url){
       const data = JSON.parse(txt);
       if(!Array.isArray(data)) throw new Error('formato inesperado');
       return data;
-    }catch(e){ ultimoErro=e; await new Promise(r=>setTimeout(r, 500*(tentativa+1))); }
+    }catch(e){ ultimoErro=e; if(tentativa<2) await new Promise(r=>setTimeout(r, 800)); }
   }
   throw ultimoErro || new Error('falha ao ler');
 }
-// Apps Script primeiro (com retry). Só usa gviz (que trunca) na 1ª carga; senão mantém o anterior.
+// Apps Script primeiro (3 tentativas). Se falhar E ainda não há dados, cai pro gviz.
 async function loadAging(){
   if(CONFIG.AGING_JSON_URL){
     try{ const a=await fetchJsonRows(CONFIG.AGING_JSON_URL);
       if(a && a.length>1){ state.agingSource='Apps Script'; return a; } }
-    catch(e){ console.warn('[Aging] Apps Script indisponível nesta atualização (mantendo dados)'); }
+    catch(e){ console.warn('[Aging] Apps Script indisponível'); }
   }
   if(CONFIG.AGING_CSV_URL){
     try{ const a=await fetchCsv(CONFIG.SHEET_AGING, undefined, CONFIG.AGING_CSV_URL);
       if(a && a.length>1){ state.agingSource='CSV publicado'; return a; } }catch(e){}
   }
-  // gviz trunca — só recorre a ele se ainda não há nenhum aging carregado
+  // gviz: usa sempre na 1ª carga; nas seguintes só se não há dados carregados
   if(!state.aging || !state.aging.length){
     try{ const a=await fetchCsv(CONFIG.SHEET_AGING);
-      if(a && a.length>1){ state.agingSource='gviz'; return a; } }catch(e){}
+      if(a && a.length>1){ state.agingSource='gviz'; console.warn('[Aging] usando gviz (truncado)'); return a; } }catch(e){}
   }
-  return null;   // mantém o aging anterior
+  return null;
 }
 async function loadData(){
+  // Volumes e aging em paralelo (aging não bloqueia a tela)
+  const [agRes, agingRes] = await Promise.allSettled([
+    fetchCsv(CONFIG.SHEET_AGREGADO),
+    (async ()=>{
+      const precisaAging = !state.aging.length || (Date.now() - (state.agingLastLoad||0)) >= CONFIG.AGING_REFRESH_MS;
+      return precisaAging ? loadAging() : null;
+    })()
+  ]);
+
+  // processa volume
   try{
-    const ag = await fetchCsv(CONFIG.SHEET_AGREGADO);
+    const ag = agRes.status==='fulfilled' ? agRes.value : null;
     if(!ag || ag.length<2) throw new Error('vazio');
-    parseAgregado(ag);
-    state.demo=false; banner(false);
+    parseAgregado(ag); state.demo=false; banner(false);
   }catch(err){
-    console.warn('Falha ao ler Sheets (volumes), usando demo:', err);
+    console.warn('Falha ao ler volumes, usando demo:', err);
     loadDemo(); state.demo=true; banner(true);
   }
-  // Aging — recarrega no seu próprio intervalo (AGING_REFRESH_MS). Se falhar, mantém o anterior.
+
+  // processa aging (se veio)
   try{
-    const precisaAging = !state.aging.length || (Date.now() - (state.agingLastLoad||0)) >= CONFIG.AGING_REFRESH_MS;
-    if(precisaAging){
-      const aging = await loadAging();
-      if(aging){ parseAging(aging); state.agingLastLoad = Date.now(); }
-    }
-  }catch(err){ console.warn('[Aging] mantendo dados anteriores nesta atualização'); }
+    const aging = agingRes.status==='fulfilled' ? agingRes.value : null;
+    if(aging){ parseAging(aging); state.agingLastLoad=Date.now(); }
+  }catch(err){ console.warn('[Aging] mantendo dados anteriores'); }
   // Produtividade (planilha de tracking) — independente; se falhar, mantém demo dessa parte
   try{
     const [desc, car] = await Promise.all([
