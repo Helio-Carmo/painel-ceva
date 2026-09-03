@@ -605,38 +605,50 @@ function fetchCsv(sheet, id, directUrl){
   });
 }
 // lê a aba pelo Apps Script (/exec) — retorna array de arrays (linha 0 = cabeçalho)
+// usado pelo Plano de Ação (leitura com retry)
 async function fetchJsonRows(url){
   let ultimoErro;
-  for(let tentativa=0; tentativa<3; tentativa++){
+  for(let t=0; t<3; t++){
     try{
       const u = url + (url.includes('?')?'&':'?') + 'cb=' + Date.now() + Math.random().toString(36).slice(2);
       const res = await fetch(u, {redirect:'follow', cache:'no-store'});
       if(!res.ok) throw new Error('HTTP '+res.status);
-      const txt = await res.text();
-      const data = JSON.parse(txt);
+      const data = JSON.parse(await res.text());
       if(!Array.isArray(data)) throw new Error('formato inesperado');
       return data;
-    }catch(e){ ultimoErro=e; if(tentativa<2) await new Promise(r=>setTimeout(r, 800)); }
+    }catch(e){ ultimoErro=e; if(t<2) await new Promise(r=>setTimeout(r,800)); }
   }
-  throw ultimoErro || new Error('falha ao ler');
+  throw ultimoErro;
 }
-// Apps Script primeiro (3 tentativas). Se falhar E ainda não há dados, cai pro gviz.
+// Estratégia: carrega gviz imediatamente (sem redirect, sem espera),
+// depois tenta o Apps Script em background; se conseguir, substitui silenciosamente.
 async function loadAging(){
-  if(CONFIG.AGING_JSON_URL){
-    try{ const a=await fetchJsonRows(CONFIG.AGING_JSON_URL);
-      if(a && a.length>1){ state.agingSource='Apps Script'; return a; } }
-    catch(e){ console.warn('[Aging] Apps Script indisponível'); }
-  }
-  if(CONFIG.AGING_CSV_URL){
-    try{ const a=await fetchCsv(CONFIG.SHEET_AGING, undefined, CONFIG.AGING_CSV_URL);
-      if(a && a.length>1){ state.agingSource='CSV publicado'; return a; } }catch(e){}
-  }
-  // gviz: usa sempre na 1ª carga; nas seguintes só se não há dados carregados
-  if(!state.aging || !state.aging.length){
-    try{ const a=await fetchCsv(CONFIG.SHEET_AGING);
-      if(a && a.length>1){ state.agingSource='gviz'; console.warn('[Aging] usando gviz (truncado)'); return a; } }catch(e){}
-  }
+  // 1) gviz — rápido e sem redirect (pode truncar, mas carrega na hora)
+  try{
+    const a = await fetchCsv(CONFIG.SHEET_AGING);
+    if(a && a.length>1){ state.agingSource='gviz'; return a; }
+  }catch(e){ console.warn('[Aging] gviz falhou:', e.message); }
   return null;
+}
+async function loadAgingBackground(){
+  // Só tenta o Apps Script se houver URL configurada
+  if(!CONFIG.AGING_JSON_URL) return;
+  for(let t=0; t<3; t++){
+    try{
+      const u = CONFIG.AGING_JSON_URL + '?cb=' + Date.now() + Math.random().toString(36).slice(2);
+      const res = await fetch(u, {redirect:'follow', cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = JSON.parse(await res.text());
+      if(!Array.isArray(data) || data.length<2) throw new Error('vazio');
+      // conseguiu — substitui o aging e re-renderiza silenciosamente
+      state.agingSource='Apps Script';
+      parseAging(data); state.agingLastLoad=Date.now();
+      console.log('[Aging] background: Apps Script ok, '+state.aging.length+' linhas');
+      buildDerived(); if(!state.tv.on) render();
+      return;
+    }catch(e){ await new Promise(r=>setTimeout(r, 2000*(t+1))); }
+  }
+  // silencia — nada muda na tela, gviz continua
 }
 async function loadData(){
   // Volumes e aging em paralelo (aging não bloqueia a tela)
@@ -663,6 +675,8 @@ async function loadData(){
     const aging = agingRes.status==='fulfilled' ? agingRes.value : null;
     if(aging){ parseAging(aging); state.agingLastLoad=Date.now(); }
   }catch(err){ console.warn('[Aging] mantendo dados anteriores'); }
+  // dispara Apps Script em background (substitui gviz silenciosamente se conseguir)
+  loadAgingBackground();
   // Produtividade (planilha de tracking) — independente; se falhar, mantém demo dessa parte
   try{
     const [desc, car] = await Promise.all([
@@ -691,12 +705,6 @@ async function loadData(){
   populateFilters();
   render();
   document.getElementById('liveTxt').textContent = 'ao vivo · atualizado ' + nowHMS();
-  // aviso visível se o Apps Script foi configurado mas a leitura caiu no gviz (truncado)
-  if(!state.demo && CONFIG.AGING_JSON_URL && state.agingSource!=='Apps Script'){
-    document.getElementById('bannerTxt').innerHTML =
-      '<b>Aging: a leitura pelo Apps Script falhou</b> — confira se a implantação está como “Qualquer pessoa” (acesso anônimo) e teste a URL /exec numa janela anônima. Usando gviz por enquanto (pode truncar).';
-    banner(true);
-  }
 }
 function colsSaida(h){
   return {
@@ -1794,7 +1802,7 @@ document.addEventListener('keydown',e=>{
 /* ================= BOOT ================= */
 tickClock(); setInterval(tickClock,1000);
 loadData();
-setInterval(()=>{ loadData(); }, CONFIG.REFRESH_MS); // auto-refresh dos dados
+setInterval(()=>{ loadData(); }, CONFIG.REFRESH_MS); // auto-refresh dos dados (gviz imediato + Apps Script em background)
 </script>
 </body>
 </html>
