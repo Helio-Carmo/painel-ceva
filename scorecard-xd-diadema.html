@@ -495,7 +495,8 @@ const CONFIG = {
   // Alternativa: link CSV de "Publicar na web" da aba de Aging (usado só se AGING_JSON_URL estiver vazio).
   AGING_CSV_URL: '',
 
-  REFRESH_MS: 5 * 60 * 1000,   // recarrega dados a cada 5 min
+  REFRESH_MS: 5 * 60 * 1000,        // recarrega volumes/produtividade/plano a cada 5 min
+  AGING_REFRESH_MS: 15 * 60 * 1000, // <<< recarrega SÓ o aging a cada 15 min (mude aqui se quiser)
   TV_ROTATE_MS: 14 * 1000,     // troca o cliente em foco no modo TV a cada 14s
 };
 const trackingId = ()=> CONFIG.SHEET_ID_TRACKING || CONFIG.SHEET_ID;
@@ -648,11 +649,13 @@ async function loadData(){
     console.warn('Falha ao ler Sheets (volumes), usando demo:', err);
     loadDemo(); state.demo=true; banner(true);
   }
-  // Aging — independente. Se a atualização falhar, mantém o que já estava carregado.
+  // Aging — recarrega no seu próprio intervalo (AGING_REFRESH_MS). Se falhar, mantém o anterior.
   try{
-    const aging = await loadAging();
-    if(aging){ parseAging(aging); }
-    else if(!state.aging.length && state.demo){ /* demo já preencheu aging */ }
+    const precisaAging = !state.aging.length || (Date.now() - (state.agingLastLoad||0)) >= CONFIG.AGING_REFRESH_MS;
+    if(precisaAging){
+      const aging = await loadAging();
+      if(aging){ parseAging(aging); state.agingLastLoad = Date.now(); }
+    }
   }catch(err){ console.warn('[Aging] mantendo dados anteriores nesta atualização'); }
   // Produtividade (planilha de tracking) — independente; se falhar, mantém demo dessa parte
   try{
