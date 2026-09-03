@@ -700,7 +700,8 @@ async function loadData(){
     const setup = await fetchCsv(CONFIG.SHEET_SETUP);
     parseSetup(setup||[]);
   }catch(err){ console.warn('Falha ao ler Setup (metas):', err); }
-  await loadPlano();
+  // Plano de Ação em background (não bloqueia a renderização)
+  loadPlanoBackground();
   buildDerived();
   populateFilters();
   render();
@@ -1305,12 +1306,33 @@ const isConcluido = (s)=> norm(s)==='concluido';
 function planoAtrasado(p){ if(isConcluido(p.status)) return false; const d=parseDate(p.final); if(!d) return false; const t=new Date(); t.setHours(0,0,0,0); return d.getTime()<t.getTime(); }
 
 async function loadPlano(){
+  // leitura síncrona usada só no salvarPlano (após gravar)
   try{
     const url=planoUrl(); if(!url){ state.planos=[]; return; }
-    const rows = await fetchJsonRows(url + (url.includes('?')?'&':'?') + 'recurso=plano_acao');
+    const u = url + '?recurso=plano_acao&cb=' + Date.now() + Math.random().toString(36).slice(2);
+    const res = await fetch(u, {redirect:'follow', cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const rows = await res.json();
     parsePlano(Array.isArray(rows)?rows:[]);
-    console.log('[Plano] carregados:', state.planos.length);
-  }catch(e){ console.warn('Falha ao ler Plano_Acao:', e); }
+  }catch(e){ console.warn('Falha ao ler Plano_Acao:', e.message); }
+}
+async function loadPlanoBackground(){
+  // background silencioso — 3 tentativas espaçadas, não polui console nem bloqueia
+  const url=planoUrl(); if(!url) return;
+  for(let t=0; t<3; t++){
+    try{
+      const u = url + '?recurso=plano_acao&cb=' + Date.now() + Math.random().toString(36).slice(2);
+      const res = await fetch(u, {redirect:'follow', cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const rows = await res.json();
+      if(!Array.isArray(rows) || rows.length<1) throw new Error('vazio');
+      parsePlano(rows);
+      console.log('[Plano] carregados:', state.planos.length);
+      if(state.view==='plano') render();
+      return; // sucesso — para aqui
+    }catch(e){ await new Promise(r=>setTimeout(r, 2000*(t+1))); }
+  }
+  // silencia após 3 falhas — não mostra erro na tela
 }
 function parsePlano(rows){
   if(!rows || rows.length<2){ state.planos=[]; return; }
