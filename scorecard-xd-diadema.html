@@ -606,41 +606,54 @@ function fetchCsv(sheet, id, directUrl){
 // lê a aba pelo Apps Script (/exec) — retorna array de arrays (linha 0 = cabeçalho)
 async function fetchJsonRows(url){
   let ultimoErro;
-  for(let tentativa=0; tentativa<3; tentativa++){
+  for(let tentativa=0; tentativa<5; tentativa++){
     try{
-      const u = url + (url.includes('?')?'&':'?') + '_=' + Date.now() + '_' + tentativa;
+      // cada tentativa com sufixo único força um novo redirect (evita repetir o 404 do endereço temporário)
+      const u = url + (url.includes('?')?'&':'?') + 'cb=' + Date.now() + Math.random().toString(36).slice(2);
       const res = await fetch(u, {redirect:'follow', cache:'no-store'});
       if(!res.ok) throw new Error('HTTP '+res.status);
       const txt = await res.text();
       const data = JSON.parse(txt);
       if(!Array.isArray(data)) throw new Error('formato inesperado');
       return data;
-    }catch(e){ ultimoErro=e; await new Promise(r=>setTimeout(r, 400*(tentativa+1))); }
+    }catch(e){ ultimoErro=e; await new Promise(r=>setTimeout(r, 500*(tentativa+1))); }
   }
   throw ultimoErro || new Error('falha ao ler');
 }
-// tenta ler o aging na ordem: Apps Script -> CSV publicado -> gviz; registra a fonte usada
+// Apps Script primeiro (com retry). Só usa gviz (que trunca) na 1ª carga; senão mantém o anterior.
 async function loadAging(){
-  const tries=[];
-  if(CONFIG.AGING_JSON_URL) tries.push(['Apps Script', ()=>fetchJsonRows(CONFIG.AGING_JSON_URL)]);
-  if(CONFIG.AGING_CSV_URL)  tries.push(['CSV publicado', ()=>fetchCsv(CONFIG.SHEET_AGING, undefined, CONFIG.AGING_CSV_URL)]);
-  tries.push(['gviz', ()=>fetchCsv(CONFIG.SHEET_AGING)]);
-  for(const [src,fn] of tries){
-    try{ const a=await fn(); if(a && a.length>1){ state.agingSource=src; console.log('[Aging] fonte:', src); return a; } }
-    catch(e){ console.warn('[Aging] falha via '+src+':', e); }
+  if(CONFIG.AGING_JSON_URL){
+    try{ const a=await fetchJsonRows(CONFIG.AGING_JSON_URL);
+      if(a && a.length>1){ state.agingSource='Apps Script'; return a; } }
+    catch(e){ console.warn('[Aging] Apps Script indisponível nesta atualização (mantendo dados)'); }
   }
-  return null;
+  if(CONFIG.AGING_CSV_URL){
+    try{ const a=await fetchCsv(CONFIG.SHEET_AGING, undefined, CONFIG.AGING_CSV_URL);
+      if(a && a.length>1){ state.agingSource='CSV publicado'; return a; } }catch(e){}
+  }
+  // gviz trunca — só recorre a ele se ainda não há nenhum aging carregado
+  if(!state.aging || !state.aging.length){
+    try{ const a=await fetchCsv(CONFIG.SHEET_AGING);
+      if(a && a.length>1){ state.agingSource='gviz'; return a; } }catch(e){}
+  }
+  return null;   // mantém o aging anterior
 }
 async function loadData(){
   try{
-    const [ag, aging] = await Promise.all([ fetchCsv(CONFIG.SHEET_AGREGADO), loadAging() ]);
-    if(!ag || ag.length<2 || !aging) throw new Error('vazio');
-    parseAgregado(ag); parseAging(aging);
+    const ag = await fetchCsv(CONFIG.SHEET_AGREGADO);
+    if(!ag || ag.length<2) throw new Error('vazio');
+    parseAgregado(ag);
     state.demo=false; banner(false);
   }catch(err){
     console.warn('Falha ao ler Sheets (volumes), usando demo:', err);
     loadDemo(); state.demo=true; banner(true);
   }
+  // Aging — independente. Se a atualização falhar, mantém o que já estava carregado.
+  try{
+    const aging = await loadAging();
+    if(aging){ parseAging(aging); }
+    else if(!state.aging.length && state.demo){ /* demo já preencheu aging */ }
+  }catch(err){ console.warn('[Aging] mantendo dados anteriores nesta atualização'); }
   // Produtividade (planilha de tracking) — independente; se falhar, mantém demo dessa parte
   try{
     const [desc, car] = await Promise.all([
