@@ -606,17 +606,26 @@ function fetchCsv(sheet, id, directUrl){
 }
 // lê a aba pelo Apps Script (/exec) — retorna array de arrays (linha 0 = cabeçalho)
 // usado pelo Plano de Ação (leitura com retry)
+// Fetch com timeout — necessário porque o redirect do Apps Script pode demorar muito
+async function fetchWithTimeout(url, ms=15000){
+  const ctrl=new AbortController();
+  const tid=setTimeout(()=>ctrl.abort(), ms);
+  try{
+    const res=await fetch(url,{redirect:'follow',cache:'no-store',signal:ctrl.signal});
+    clearTimeout(tid); return res;
+  }catch(e){ clearTimeout(tid); throw e; }
+}
 async function fetchJsonRows(url){
   let ultimoErro;
   for(let t=0; t<3; t++){
     try{
-      const u = url + (url.includes('?')?'&':'?') + 'cb=' + Date.now() + Math.random().toString(36).slice(2);
-      const res = await fetch(u, {redirect:'follow', cache:'no-store'});
+      const u=url+(url.includes('?')?'&':'?')+'cb='+Date.now()+Math.random().toString(36).slice(2);
+      const res=await fetchWithTimeout(u, 15000); // 15s de timeout — Apps Script pode ser lento
       if(!res.ok) throw new Error('HTTP '+res.status);
-      const data = JSON.parse(await res.text());
+      const data=JSON.parse(await res.text());
       if(!Array.isArray(data)) throw new Error('formato inesperado');
       return data;
-    }catch(e){ ultimoErro=e; if(t<2) await new Promise(r=>setTimeout(r,800)); }
+    }catch(e){ ultimoErro=e; if(t<2) await new Promise(r=>setTimeout(r,4000)); } // 4s entre tentativas
   }
   throw ultimoErro;
 }
@@ -631,24 +640,21 @@ async function loadAging(){
   return null;
 }
 async function loadAgingBackground(){
-  // Só tenta o Apps Script se houver URL configurada
   if(!CONFIG.AGING_JSON_URL) return;
   for(let t=0; t<3; t++){
     try{
-      const u = CONFIG.AGING_JSON_URL + '?cb=' + Date.now() + Math.random().toString(36).slice(2);
-      const res = await fetch(u, {redirect:'follow', cache:'no-store'});
+      const u=CONFIG.AGING_JSON_URL+'?cb='+Date.now()+Math.random().toString(36).slice(2);
+      const res=await fetchWithTimeout(u, 15000);
       if(!res.ok) throw new Error('HTTP '+res.status);
-      const data = JSON.parse(await res.text());
-      if(!Array.isArray(data) || data.length<2) throw new Error('vazio');
-      // conseguiu — substitui o aging e re-renderiza silenciosamente
+      const data=JSON.parse(await res.text());
+      if(!Array.isArray(data)||data.length<2) throw new Error('vazio');
       state.agingSource='Apps Script';
       parseAging(data); state.agingLastLoad=Date.now();
-      console.log('[Aging] background: Apps Script ok, '+state.aging.length+' linhas');
+      console.log('[Aging] background ok:', state.aging.length,'linhas');
       buildDerived(); if(!state.tv.on) render();
       return;
-    }catch(e){ await new Promise(r=>setTimeout(r, 2000*(t+1))); }
+    }catch(e){ await new Promise(r=>setTimeout(r,4000*(t+1))); }
   }
-  // silencia — nada muda na tela, gviz continua
 }
 async function loadData(){
   // Volumes e aging em paralelo (aging não bloqueia a tela)
@@ -1317,22 +1323,20 @@ async function loadPlano(){
   }catch(e){ console.warn('Falha ao ler Plano_Acao:', e.message); }
 }
 async function loadPlanoBackground(){
-  // background silencioso — 3 tentativas espaçadas, não polui console nem bloqueia
   const url=planoUrl(); if(!url) return;
   for(let t=0; t<3; t++){
     try{
-      const u = url + '?recurso=plano_acao&cb=' + Date.now() + Math.random().toString(36).slice(2);
-      const res = await fetch(u, {redirect:'follow', cache:'no-store'});
+      const u=url+'?recurso=plano_acao&cb='+Date.now()+Math.random().toString(36).slice(2);
+      const res=await fetchWithTimeout(u, 15000);
       if(!res.ok) throw new Error('HTTP '+res.status);
-      const rows = await res.json();
-      if(!Array.isArray(rows) || rows.length<1) throw new Error('vazio');
+      const rows=await res.json();
+      if(!Array.isArray(rows)||rows.length<1) throw new Error('vazio');
       parsePlano(rows);
       console.log('[Plano] carregados:', state.planos.length);
       if(state.view==='plano') render();
-      return; // sucesso — para aqui
-    }catch(e){ await new Promise(r=>setTimeout(r, 2000*(t+1))); }
+      return;
+    }catch(e){ await new Promise(r=>setTimeout(r,4000*(t+1))); }
   }
-  // silencia após 3 falhas — não mostra erro na tela
 }
 function parsePlano(rows){
   if(!rows || rows.length<2){ state.planos=[]; return; }
