@@ -257,6 +257,31 @@ body.tv .tvexit{display:inline-flex;align-items:center;gap:6px;position:fixed;to
   border-radius:10px;padding:9px 15px;font-weight:700;font-size:12px;letter-spacing:.06em;cursor:pointer}
 body.tv .tvexit:hover{background:rgba(255,91,82,.28)}
 
+/* ===== Alternância XD / CDC ===== */
+.brand h1{cursor:pointer;user-select:none;transition:opacity .15s}
+.brand h1:hover{opacity:.82}
+.brand h1::after{content:"▾";font-size:14px;color:var(--muted);margin-left:8px;vertical-align:middle}
+body.tv .brand h1{cursor:default}
+body.tv .brand h1::after{display:none}
+.pickgrid{display:grid;gap:10px;padding:8px 0 4px}
+.pickbtn{border:1px solid var(--line2);background:var(--panel);color:var(--text);border-radius:12px;
+  padding:14px 16px;font-family:'Barlow Semi Condensed';font-weight:800;font-size:16px;letter-spacing:.04em;
+  text-align:left;cursor:pointer;text-transform:uppercase;transition:.15s}
+.pickbtn:hover{border-color:var(--blue);background:rgba(74,163,255,.08)}
+.pickbtn.on{border-color:var(--blue);background:var(--blue);color:#04121f}
+.pickbtn small{display:block;font-family:'Inter';font-weight:500;font-size:11px;letter-spacing:0;
+  text-transform:none;color:var(--muted);margin-top:3px}
+.pickbtn.on small{color:rgba(4,18,31,.7)}
+
+/* CDC · "Todas": empilha Milkrun e Line Haul */
+.grid.cdc-multi{display:block}
+.cdc-block{margin-bottom:16px}
+.cdc-block:last-child{margin-bottom:0}
+.cdc-orig-head{display:flex;align-items:center;gap:8px;margin:4px 2px 10px;
+  font-family:'Barlow Semi Condensed';font-weight:800;font-size:13px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted)}
+.cdc-orig-head i{width:9px;height:9px;border-radius:3px;display:inline-block}
+
 @media (max-width:900px){
   .kpis{grid-template-columns:repeat(2,1fr)}
   .grid{grid-template-columns:1fr}
@@ -272,7 +297,7 @@ body.tv .tvexit:hover{background:rgba(255,91,82,.28)}
 <div class="app">
   <!-- Menu lateral -->
   <aside class="sidebar">
-    <div class="logo">XD<small>DIADEMA</small></div>
+    <div class="logo" id="sideLogo">XD<small>DIADEMA</small></div>
     <nav class="nav">
       <button class="navitem on" data-view="volumes">
         <svg viewBox="0 0 24 24"><path d="M4 20V11M10 20V4M16 20v-6M22 20H2"/></svg>
@@ -311,6 +336,16 @@ body.tv .tvexit:hover{background:rgba(255,91,82,.28)}
         </div>
         <div class="selwrap prod-only"><label>Rota</label>
           <select id="fRota" class="sel"><option value="TODOS">Todas</option></select>
+        </div>
+        <div class="selwrap" style="display:none"><label>Operação</label>
+          <select id="fCdcOrigem" class="sel">
+            <option value="todas">Todas</option>
+            <option value="milkrun">Milkrun</option>
+            <option value="linehaul">Line Haul</option>
+          </select>
+        </div>
+        <div class="selwrap" style="display:none"><label>Turno</label>
+          <select id="fTurno" class="sel"><option value="TODOS">Todos</option></select>
         </div>
         <div class="selwrap"><label>Ano</label>
           <select id="fAno" class="sel"><option value="TODOS">Todos</option></select>
@@ -467,6 +502,18 @@ body.tv .tvexit:hover{background:rgba(255,91,82,.28)}
   </div>
 </div>
 
+<!-- Modal de escolha (troca de operação / alvo do modo TV) -->
+<div class="overlay" id="pickOverlay">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(420px,100%)">
+    <div class="mhead">
+      <div><div class="mt" id="pickTitle">Escolher operação</div>
+        <div class="ms" id="pickSub"></div></div>
+      <div class="mactions"><button class="iconbtn" id="pickClose" aria-label="Fechar">✕</button></div>
+    </div>
+    <div class="mbody"><div class="pickgrid" id="pickGrid"></div></div>
+  </div>
+</div>
+
 <script>
 /* ================= CONFIG ================= */
 const CONFIG = {
@@ -481,6 +528,16 @@ const CONFIG = {
   SHEET_DESCARGA: 'Base Descarga',
   SHEET_CARREGAMENTO: 'Base Carregamento',
   SHEET_SETUP: 'Setup',   // metas (Target): Aderencia_Saida, Descarga, Carregamento
+
+  // ===== CDC Diadema (mesma planilha do tracking) =====
+  // Cada linha das abas CDC traz DUAS sub-operações (Descarga + Carregamento)
+  // em faixas de colunas diferentes. Índices 0-based (A=0, B=1, ... L=11, T=19, U=20, AD=29).
+  SHEET_CDC_MILKRUN: 'CDC_Milkrun',
+  SHEET_CDC_LINEHAUL: 'CDC_Line_Haul',
+  CDC_COLS: {
+    milkrun:  { descarga:[11,19], carregamento:[20,29] },
+    linehaul: { descarga:[10,19], carregamento:[20,29] },
+  },
 
   // Como agregar a produtividade:
   //  'pessoa_hora'  = Volume_somado ÷ HH_total,  onde HH = Σ(Pessoas × Tempo)   ← CORRETO (Homem-Hora)
@@ -536,14 +593,21 @@ try{ Chart.register(targetLinePlugin); }catch(e){}
 const state = {
   agregado: [], horario: [], aging: [], descarga: [], carregamento: [], planos: [],
   volClientes: [], volAnos: [], prodClientes: [], rotas: [], prodAnos: [],
-  filtro: { cliente:'TODOS', rota:'TODOS', ano:'TODOS', mes:'TODOS', periodo:'DIA', de:'', ate:'' },
+  filtro: { cliente:'TODOS', rota:'TODOS', ano:'TODOS', mes:'TODOS', periodo:'DIA', de:'', ate:'', turno:'TODOS' },
   view: 'volumes',
+  scope: 'XD',          // 'XD' | 'CDC'
+  cdcOrigem: 'todas',   // 'todas' | 'milkrun' | 'linehaul'
+  cdc: { milkrun:{descarga:[],carregamento:[]}, linehaul:{descarga:[],carregamento:[]} },
+  cdcClientes: [], cdcAnos: [], cdcTurnos: [],
   demo: false,
   showLabels: true,
   targets: {},   // metas por cliente: { GERAL:{aderencia,descarga,carregamento}, GM:{...}, ... }
   charts: [],
-  tv: { on:false, idx:0, timer:null },
+  tv: { on:false, idx:0, timer:null, alvo:'XD' }, // alvo: 'XD' | 'CDC' | 'AMBOS'
 };
+const cdcOrigensAtivas = ()=> state.cdcOrigem==='todas' ? ['milkrun','linehaul'] : [state.cdcOrigem];
+const cdcDescargaAtiva = ()=> cdcOrigensAtivas().flatMap(k=> (state.cdc[k]||{}).descarga || []);
+const cdcCarregAtiva   = ()=> cdcOrigensAtivas().flatMap(k=> (state.cdc[k]||{}).carregamento || []);
 const corRota = (r, i)=> corDim(r, i);
 
 /* ================= HELPERS ================= */
@@ -695,6 +759,18 @@ async function loadData(){
     console.warn('Falha ao ler Sheets (produtividade), usando demo:', err);
     if(!state.demo){ banner(true); }
     loadDemoProd();
+  }
+  // CDC Diadema (Milkrun + Line Haul) — independente; falha isolada não afeta o XD
+  try{
+    const [mk, lh] = await Promise.all([
+      fetchCsv(CONFIG.SHEET_CDC_MILKRUN, trackingId()),
+      fetchCsv(CONFIG.SHEET_CDC_LINEHAUL, trackingId()),
+    ]);
+    if((!mk||mk.length<2) && (!lh||lh.length<2)) throw new Error('vazio');
+    parseCdc(mk||[], 'milkrun'); parseCdc(lh||[], 'linehaul');
+  }catch(err){
+    console.warn('Falha ao ler CDC (Milkrun/Line Haul), usando demo:', err);
+    loadDemoCdc();
   }
   // Base horária (opcional) — usada quando o período for "Hora"
   try{
@@ -862,6 +938,67 @@ function parseCarregamento(rows){
   console.log('[Carregamento] Vol('+mm(vols)+') Horas('+mm(hrs)+') Pessoas('+mm(pes)+') | suspeitas:',ruins.length);
   console.table(piores);
 }
+
+/* ============ CDC Diadema (Milkrun / Line Haul) ============
+   Mesma metodologia do XD: produtividade = ΣVol ÷ Σ(Pessoas×Horas).
+   Na planilha do CDC a produtividade por linha é 1 / ((MOD(Término−Início;1)·24) · SE(Pessoas>2;Pessoas;1)),
+   ou seja: cada operação vale Vol=1 e HH = duração × fator, onde fator = Pessoas>2 ? Pessoas : 1.
+   Guardando vol:1 e pessoas:fator, as funções prodValue/prodByEntity/prodByPeriod do XD reutilizam sem mudança. */
+function normTurno(v){
+  const n=(''+ (v??'')).replace(/[^\d]/g,'');
+  return n ? n+'º' : '—';
+}
+// monta uma linha de produtividade CDC a partir de um bloco de colunas (Descarga OU Carregamento)
+function linhaProdCDC(r, cols, cli, arrivalDate){
+  if(cols.iIni<0 || cols.iFim<0 || cols.iPes<0) return null;
+  const iniStr=(r[cols.iIni]??'').toString().trim();
+  const fimStr=(r[cols.iFim]??'').toString().trim();
+  const iniF=parseTimeFrac(iniStr), fimF=parseTimeFrac(fimStr);
+  const pesRaw=parseNum(r[cols.iPes]);
+  if(iniF==null || fimF==null || !(pesRaw>0)) return null;   // ≈ OU(Início="";Término="";Pessoas="";Pessoas=0)
+  const h=durHoras(iniF,fimF);
+  if(h==null || h<=0) return null;
+  const fator = pesRaw>2 ? pesRaw : 1;                        // SE(Pessoas>2; Pessoas; 1)
+  let date = arrivalDate;
+  if(arrivalDate){
+    date = new Date(arrivalDate.getFullYear(),arrivalDate.getMonth(),arrivalDate.getDate());
+    const chegF = cols.iHora>=0 ? parseTimeFrac(r[cols.iHora]) : null;
+    if(chegF!=null && iniF < chegF) date.setDate(date.getDate()+1); // virada de meia-noite
+  }
+  const turno = cols.iTurno>=0 ? normTurno(r[cols.iTurno]) : '—';
+  return { cliente:cli||'—', rota:cli||'—', turno, date, ym:date?ymKey(date):'',
+           vol:1, hours:h, pessoas:fator, pessoasReais:pesRaw, iniStr, fimStr };
+}
+// acha os índices de um bloco (faixa de colunas) buscando pelos nomes de cabeçalho dentro do slice
+function cdcBlockCols(headerRow, range){
+  const [c0,c1]=range;
+  const hb=headerRow.slice(c0, c1+1);
+  const f=(...names)=>{ const j=findCol(hb, ...names); return j<0 ? -1 : j+c0; };
+  return {
+    iTurno: f('Turno'),
+    iPes:   f('Qtde. pessoas','Qtde pessoas','Qtd de pessoas','Qtd. Pessoas','Qtd Pessoas','Pessoas'),
+    iHora:  f('horário chegada','Horario de chegada','Horário Chegada','Horario Chegada','Inicio chegada','Início chegada','Hora Chegada'),
+    iIni:   f('Inicio real','Início real','InicioReal'),
+    iFim:   f('Termino real','Término real','TerminoReal'),
+  };
+}
+function parseCdc(rows, origemKey){
+  const rng = CONFIG.CDC_COLS[origemKey];
+  if(!rows || rows.length<2 || !rng){ state.cdc[origemKey]={descarga:[],carregamento:[]}; return; }
+  const hr=findHeaderRow(rows), h=rows[hr];
+  const iData=findCol(h,'Data da chegada','Data chegada','Data_Chegada','DataChegada','Data'),
+        iCli =findCol(h,'Operação','Operacao','Cliente');
+  const dc=cdcBlockCols(h, rng.descarga), cc=cdcBlockCols(h, rng.carregamento);
+  const out={descarga:[],carregamento:[]};
+  rows.slice(hr+1).forEach(r=>{
+    const arrival=parseDate(r[iData]);
+    const cli=(r[iCli]||'').toString().trim().toUpperCase();
+    const d=linhaProdCDC(r, dc, cli, arrival); if(d) out.descarga.push(d);
+    const c=linhaProdCDC(r, cc, cli, arrival); if(c) out.carregamento.push(c);
+  });
+  state.cdc[origemKey]=out;
+  console.log(`[CDC ${origemKey}] header linha ${hr} · descarga ${out.descarga.length} · carregamento ${out.carregamento.length}`);
+}
 // Setup: colunas Cliente | Atividade | Target. Guarda meta por cliente e usa GERAL como padrão.
 function parseSetup(rows){
   const H = (rows && rows[0]) ? rows[0].map(norm) : [];
@@ -914,30 +1051,48 @@ function buildDerived(){
   state.prodClientes=[...prodCli].sort();
   state.rotas=[...rot].sort();
   state.prodAnos=[...prodAnos].sort((a,b)=>b-a);
+  // CDC: clientes/anos/turnos da ORIGEM ativa (Milkrun ou Line Haul)
+  const cdcCli=new Set(), cdcAnos=new Set(), cdcTur=new Set();
+  [...cdcDescargaAtiva(), ...cdcCarregAtiva()].forEach(r=>{
+    if(r.cliente) cdcCli.add(r.cliente);
+    if(r.date) cdcAnos.add(r.date.getFullYear());
+    if(r.turno && r.turno!=='—') cdcTur.add(r.turno);
+  });
+  state.cdcClientes=[...cdcCli].sort();
+  state.cdcAnos=[...cdcAnos].sort((a,b)=>b-a);
+  state.cdcTurnos=[...cdcTur].sort();
 }
 
 /* ================= FILTROS ================= */
 function populateFilters(){
+  const cdc = state.scope==='CDC' && state.view==='prod';
   const prod = state.view==='prod', plano = state.view==='plano';
   let clientes, anos;
   if(plano){
     clientes=[...new Set(state.planos.map(p=>p.cliente).filter(Boolean))].sort();
     anos=[...new Set(state.planos.map(p=>{const d=parseDate(p.final);return d?d.getFullYear():null;}).filter(Boolean))].sort((a,b)=>b-a);
+  }else if(cdc){
+    clientes = state.cdcClientes;
+    anos     = state.cdcAnos;
   }else{
     clientes = prod ? state.prodClientes : state.volClientes;
     anos     = prod ? state.prodAnos     : state.volAnos;
   }
   const fc=document.getElementById('fCliente'), fa=document.getElementById('fAno'),
-        fm=document.getElementById('fMes'), fr=document.getElementById('fRota');
+        fm=document.getElementById('fMes'), fr=document.getElementById('fRota'),
+        ft=document.getElementById('fTurno');
   if(state.filtro.cliente!=='TODOS' && !clientes.includes(state.filtro.cliente)) state.filtro.cliente='TODOS';
   if(state.filtro.ano!=='TODOS' && !anos.map(String).includes(String(state.filtro.ano))) state.filtro.ano='TODOS';
   if(state.filtro.rota!=='TODOS' && !state.rotas.includes(state.filtro.rota)) state.filtro.rota='TODOS';
+  if(state.filtro.turno!=='TODOS' && !state.cdcTurnos.includes(state.filtro.turno)) state.filtro.turno='TODOS';
 
   fc.innerHTML='<option value="TODOS">Todos</option>'+clientes.map(c=>`<option>${c}</option>`).join('');
   fr.innerHTML='<option value="TODOS">Todas</option>'+state.rotas.map(r=>`<option>${r}</option>`).join('');
   fa.innerHTML='<option value="TODOS">Todos</option>'+anos.map(a=>`<option>${a}</option>`).join('');
   fm.innerHTML='<option value="TODOS">Todos</option>'+MESES.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
+  if(ft) ft.innerHTML='<option value="TODOS">Todos</option>'+state.cdcTurnos.map(t=>`<option>${t}</option>`).join('');
   fc.value=state.filtro.cliente; fr.value=state.filtro.rota; fa.value=state.filtro.ano; fm.value=state.filtro.mes;
+  if(ft) ft.value=state.filtro.turno;
 }
 function matchDate(r){
   const f=state.filtro;
@@ -955,6 +1110,11 @@ const filtAgregado=()=> state.agregado.filter(matchFiltro);
 const filtAging=()=> state.aging.filter(matchFiltro);
 const filtDescarga=()=> state.descarga.filter(matchFiltro);
 const filtCarreg=()=> state.carregamento.filter(matchFiltroRota);
+// CDC: cliente (coluna B) + data + turno. Não mexe no caminho do XD.
+function matchTurno(r){ return state.filtro.turno==='TODOS' || r.turno===state.filtro.turno; }
+function matchCdc(r){ return (state.filtro.cliente==='TODOS'||r.cliente===state.filtro.cliente) && matchDate(r) && matchTurno(r); }
+const filtCdcDescarga=()=> cdcDescargaAtiva().filter(matchCdc);
+const filtCdcCarreg  =()=> cdcCarregAtiva().filter(matchCdc);
 function clientesParaRenderizar(){
   if(state.filtro.cliente!=='TODOS') return [state.filtro.cliente];
   return state.volClientes.length? state.volClientes : ['—'];
@@ -964,21 +1124,49 @@ function clientesParaRenderizar(){
 function clearCharts(){ state.charts.forEach(c=>{try{c.destroy()}catch(e){}}); state.charts=[]; }
 
 function syncViewUI(){
+  const cdc = state.scope==='CDC';
+  // no CDC não existe a aba Volumes — força prod se cair nela
+  if(cdc && state.view==='volumes') state.view='prod';
   const plano = state.view==='plano';
+  document.body.classList.toggle('scope-cdc', cdc);
   document.body.classList.toggle('view-prod', state.view==='prod');
   document.body.classList.toggle('view-plano', plano);
   document.getElementById('viewVolumes').hidden = state.view!=='volumes';
   document.getElementById('viewProd').hidden = state.view!=='prod';
   document.getElementById('viewPlano').hidden = !plano;
-  document.querySelectorAll('.navitem').forEach(b=> b.classList.toggle('on', b.dataset.view===state.view));
+  document.querySelectorAll('.navitem').forEach(b=>{
+    b.classList.toggle('on', b.dataset.view===state.view);
+    if(b.dataset.view==='volumes') b.style.display = cdc ? 'none' : '';
+  });
+  // título + logo lateral: XD / CDC
+  const tb=document.querySelector('.brand h1 b'); if(tb) tb.textContent = cdc ? 'CDC' : 'XD';
+  const sl=document.getElementById('sideLogo'); if(sl) sl.innerHTML = (cdc?'CDC':'XD')+'<small>DIADEMA</small>';
+  const orig = state.cdcOrigem==='linehaul' ? 'Line Haul' : state.cdcOrigem==='milkrun' ? 'Milkrun' : 'Todas as operações';
   document.getElementById('subTitle').textContent =
-    state.view==='prod' ? 'Torre de Controle · Produtividade' :
-    plano ? 'Torre de Controle · Plano de Ação' : 'Torre de Controle · Cross Docking Diadema';
+    plano ? 'Torre de Controle · Plano de Ação' :
+    state.view==='prod' ? (cdc ? 'Torre de Controle · Produtividade CDC · '+orig : 'Torre de Controle · Produtividade') :
+    'Torre de Controle · Cross Docking Diadema';
   // controles que não se aplicam ao Plano de Ação
   document.getElementById('periodo').style.display = plano?'none':'';
   document.getElementById('btnLabels').style.display = plano?'none':'';
   document.getElementById('fDe').closest('.selwrap').style.display = plano?'none':'';
   document.getElementById('fAte').closest('.selwrap').style.display = plano?'none':'';
+  // no CDC não há base horária → esconde o botão HORA e cai para DIA se estiver nele
+  const bHora=document.querySelector('#periodo button[data-p="HORA"]');
+  if(bHora) bHora.style.display = cdc ? 'none' : '';
+  if(cdc && state.filtro.periodo==='HORA'){
+    state.filtro.periodo='DIA';
+    document.querySelectorAll('#periodo button').forEach(x=> x.classList.toggle('on', x.dataset.p==='DIA'));
+  }
+  // filtros exclusivos por modo: Turno + Origem só no CDC-prod; Rota só no XD-prod
+  const showCdc = cdc && state.view==='prod';
+  if(!showCdc){ // grids voltam ao layout padrão fora do CDC-prod
+    document.getElementById('descGrid').classList.remove('cdc-multi');
+    document.getElementById('carGrid').classList.remove('cdc-multi');
+  }
+  const ft=document.getElementById('fTurno'); if(ft) ft.closest('.selwrap').style.display = showCdc?'':'none';
+  const fo=document.getElementById('fCdcOrigem'); if(fo) fo.closest('.selwrap').style.display = showCdc?'':'none';
+  const fr=document.getElementById('fRota'); if(fr) fr.closest('.selwrap').style.display = (!cdc && state.view==='prod')?'':'none';
 }
 
 function render(){
@@ -986,7 +1174,8 @@ function render(){
   syncViewUI();
   if(state.tv.on){ renderTV(); renderTvBar(); return; }
   if(state.view==='prod'){
-    renderProdKpis(); renderDescarga(); renderCarregamento();
+    if(state.scope==='CDC') renderCdcProd();
+    else { renderProdKpis(); renderDescarga(); renderCarregamento(); }
   }else if(state.view==='plano'){
     renderPlano();
   }else{
@@ -1237,7 +1426,7 @@ function makePeriodChart(canvas, labels, data, color, target){
 function prodCard(title, sub, chartClass, buildFn, emptyMsg){
   const card=document.createElement('div');
   card.className='card'; card.style.setProperty('--c', chartClass.color);
-  const hint = /por (cliente|rota)/i.test(title) ? '<div class="hint">Clique numa barra para ver as operações e exportar.</div>' : '';
+  const hint = /por (cliente|rota|turno)/i.test(title) ? '<div class="hint">Clique numa barra para ver as operações e exportar.</div>' : '';
   card.innerHTML=`
     <div class="head"><div class="who">${title}</div>
       <div class="mini"><span>${sub.label}<b class="num" style="color:${chartClass.color}">${sub.value}</b></span></div>
@@ -1302,6 +1491,68 @@ function renderCarregamento(){
     (cv)=>{ const p=prodByPeriod(rows); if(!p.labels.length) return false;
       makePeriodChart(cv, p.labels, p.data, 'rgba(63,208,127,.85)', metaDe('carregamento', state.filtro.cliente)); return true; },
     'Sem dados de carregamento no filtro'));
+}
+
+/* ===== CDC: mesma metodologia, mas com quebra por Turno (col B = cliente) ===== */
+function renderCdcProd(){
+  const d=filtCdcDescarga(), c=filtCdcCarreg();
+  const pd=prodValue(d), pc=prodValue(c), pg=prodValue(d.concat(c));
+  const escC = state.filtro.cliente==='TODOS'?'todos os clientes':state.filtro.cliente;
+  const escT = state.filtro.turno==='TODOS'?'todos os turnos':state.filtro.turno+' turno';
+  const tD=metaDe('descarga', state.filtro.cliente), tC=metaDe('carregamento', state.filtro.cliente);
+  const K=[
+    {c: corMeta(pd, tD, 'var(--cyan)'),  lbl:'Produtividade descarga',    v:fmtDec(pd), sub: tD!=null?`meta ${fmtDec(tD)}`:'operações ÷ HH'},
+    {c:'var(--blue)',  lbl:'Operações descarga',        v:fmtNum(d.length), sub:escC},
+    {c: corMeta(pc, tC, 'var(--green)'), lbl:'Produtividade carregamento', v:fmtDec(pc), sub: tC!=null?`meta ${fmtDec(tC)}`:'operações ÷ HH'},
+    {c:'var(--violet)',lbl:'Operações carregamento',    v:fmtNum(c.length), sub:escT},
+    {c:'var(--amber)', lbl:'Produtividade geral',       v:fmtDec(pg), sub:'descarga + carregamento'},
+  ];
+  document.getElementById('kpisProd').innerHTML = K.map(k=>`
+    <div class="kpi" style="--c:${k.c}">
+      <div class="lbl">${k.lbl}</div><div class="v num">${k.v}</div><div class="sub">${k.sub}</div>
+    </div>`).join('');
+  const per = state.filtro.periodo==='MES'?'mês':'dia';
+  const origs = cdcOrigensAtivas();
+  cdcSection('descGrid','descDesc','descarga', 'var(--cyan)', 'rgba(53,214,208,.85)', tD, per, origs);
+  cdcSection('carGrid','carDesc','carregamento', 'var(--green)', 'rgba(63,208,127,.85)', tC, per, origs);
+}
+const cdcOrigNome = (k)=> k==='linehaul' ? 'Line Haul' : 'Milkrun';
+const cdcRows = (kind, origem)=> ((state.cdc[origem]||{})[kind]||[]).filter(matchCdc);
+// as 3 barras (Por cliente / Por turno / Por período) de um indicador, num container
+function cdc3Cards(target, rows, cor, corBar, meta){
+  const prod=fmtDec(prodValue(rows));
+  target.appendChild(prodCard('Por cliente', {label:'Produtividade',value:prod}, {color:cor},
+    (cv)=>{ const p=prodByEntity(rows,'cliente'); if(!p.length) return false;
+      makeEntityChart(cv, p, (n,i)=>corDim(n,i),
+        (n)=>openProdModal(n, rows.filter(r=>r.cliente===n)), meta); return true; },
+    'Sem dados no filtro'));
+  target.appendChild(prodCard('Por turno', {label:'Produtividade',value:prod}, {color:cor},
+    (cv)=>{ const p=prodByEntity(rows,'turno'); if(!p.length) return false;
+      makeEntityChart(cv, p, (n,i)=>corDim(n,i),
+        (n)=>openProdModal('Turno '+n, rows.filter(r=>r.turno===n)), meta); return true; },
+    'Sem dados no filtro'));
+  target.appendChild(prodCard('Por período', {label:'Produtividade',value:prod}, {color:cor},
+    (cv)=>{ const p=prodByPeriod(rows); if(!p.labels.length) return false;
+      makePeriodChart(cv, p.labels, p.data, corBar, meta); return true; },
+    'Sem dados no filtro'));
+}
+// uma seção (Descarga ou Carregamento). Com "Todas" as origens, empilha Milkrun e Line Haul.
+function cdcSection(gridId, descId, kind, cor, corBar, meta, per, origs){
+  const grid=document.getElementById(gridId); grid.innerHTML='';
+  const multi = origs.length>1;
+  grid.classList.toggle('cdc-multi', multi);
+  document.getElementById(descId).textContent =
+    `produtividade (operações ÷ HH) por cliente · por turno · por ${per}` +
+    (multi ? ' · Milkrun e Line Haul separados' : '');
+  if(!multi){ cdc3Cards(grid, cdcRows(kind, origs[0]), cor, corBar, meta); return; }
+  origs.forEach(k=>{
+    const block=document.createElement('div'); block.className='cdc-block';
+    const head=document.createElement('div'); head.className='cdc-orig-head';
+    head.innerHTML=`<i style="background:${cor}"></i>${cdcOrigNome(k)}`;
+    const sub=document.createElement('div'); sub.className='grid';
+    block.appendChild(head); block.appendChild(sub); grid.appendChild(block);
+    cdc3Cards(sub, cdcRows(kind, k), cor, corBar, meta);
+  });
 }
 
 /* ================= PLANO DE AÇÃO ================= */
@@ -1622,12 +1873,39 @@ function openProdModal(entity, rows){
 }
 
 /* ================= TV MODE (apresentação) ================= */
-function buildTvPages(){
+function tvPagesXD(){
   const pages=[];
-  state.volClientes.forEach(cli=> pages.push({kind:'cliente', cliente:cli, label:'VOLUME · '+cli}));
-  if(state.descarga.length || state.carregamento.length) pages.push({kind:'prod', label:'PRODUTIVIDADE'});
+  state.volClientes.forEach(cli=> pages.push({kind:'cliente', cliente:cli, label:'XD · VOLUME · '+cli}));
+  if(state.descarga.length || state.carregamento.length) pages.push({kind:'prod', label:'XD · PRODUTIVIDADE'});
+  return pages;
+}
+function tvPagesCDC(){
+  const pages=[];
+  [['milkrun','MILKRUN'],['linehaul','LINE HAUL']].forEach(([k,nome])=>{
+    const s=state.cdc[k]||{descarga:[],carregamento:[]};
+    if(s.descarga.length || s.carregamento.length) pages.push({kind:'cdc', origem:k, label:'CDC · '+nome});
+  });
+  return pages;
+}
+function buildTvPages(){
+  const alvo=state.tv.alvo||'XD';
+  let pages=[];
+  if(alvo==='CDC') pages=tvPagesCDC();
+  else if(alvo==='AMBOS') pages=tvPagesXD().concat(tvPagesCDC());
+  else pages=tvPagesXD();
   if(!pages.length) pages.push({kind:'cliente', cliente:'—', label:'VOLUME'});
   return pages;
+}
+function tvCdcKpis(origem){
+  const s=state.cdc[origem]||{descarga:[],carregamento:[]};
+  const d=s.descarga.filter(matchDate), c=s.carregamento.filter(matchDate);
+  return [
+    {c:corMeta(prodValue(d),metaDe('descarga',null),'var(--cyan)'),  lbl:'Prod. descarga',    v:fmtDec(prodValue(d))},
+    {c:'var(--blue)',  lbl:'Operações descarga',v:fmtNum(d.length)},
+    {c:corMeta(prodValue(c),metaDe('carregamento',null),'var(--green)'), lbl:'Prod. carregamento',v:fmtDec(prodValue(c))},
+    {c:'var(--violet)',lbl:'Operações carreg.',  v:fmtNum(c.length)},
+    {c:'var(--amber)', lbl:'Prod. geral',       v:fmtDec(prodValue(d.concat(c)))},
+  ];
 }
 function tvVolumeKpis(cli){
   const rows=state.agregado.filter(r=>(cli==='—'||r.cliente===cli)&&matchDate(r));
@@ -1658,13 +1936,27 @@ function renderTV(){
   const pages=buildTvPages();
   const page=pages[state.tv.idx % pages.length];
   // KPIs compactos do slide
-  const kdata = page.kind==='prod' ? tvProdKpis() : tvVolumeKpis(page.cliente);
+  const kdata = page.kind==='cdc' ? tvCdcKpis(page.origem)
+              : page.kind==='prod' ? tvProdKpis()
+              : tvVolumeKpis(page.cliente);
   const kpiRow=document.createElement('div'); kpiRow.className='tvkpis';
   kpiRow.style.gridTemplateColumns=`repeat(${kdata.length},minmax(0,1fr))`;
   kpiRow.innerHTML=kdata.map(k=>`<div class="kpi" style="--c:${k.c}"><div class="lbl">${k.lbl}</div><div class="v num">${k.v}</div></div>`).join('');
   stage.appendChild(kpiRow);
   // grade de gráficos
-  if(page.kind==='prod'){
+  if(page.kind==='cdc'){
+    const grid=document.createElement('div'); grid.className='tvgrid'; stage.appendChild(grid);
+    const s=state.cdc[page.origem]||{descarga:[],carregamento:[]};
+    const d=s.descarga.filter(matchDate), c=s.carregamento.filter(matchDate);
+    grid.appendChild(prodCard('Descarga · por cliente', {label:'Produtividade', value:fmtDec(prodValue(d))}, {color:'var(--cyan)'},
+      (cv)=>{ const p=prodByEntity(d,'cliente'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corDim(n,i),null,metaDe('descarga',null)); return true; }, 'Sem dados de descarga'));
+    grid.appendChild(prodCard('Descarga · por turno', {label:'Produtividade', value:fmtDec(prodValue(d))}, {color:'var(--cyan)'},
+      (cv)=>{ const p=prodByEntity(d,'turno'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corDim(n,i),null,metaDe('descarga',null)); return true; }, 'Sem dados de descarga'));
+    grid.appendChild(prodCard('Carregamento · por cliente', {label:'Produtividade', value:fmtDec(prodValue(c))}, {color:'var(--green)'},
+      (cv)=>{ const p=prodByEntity(c,'cliente'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corDim(n,i),null,metaDe('carregamento',null)); return true; }, 'Sem dados de carregamento'));
+    grid.appendChild(prodCard('Carregamento · por turno', {label:'Produtividade', value:fmtDec(prodValue(c))}, {color:'var(--green)'},
+      (cv)=>{ const p=prodByEntity(c,'turno'); if(!p.length) return false; makeEntityChart(cv,p,(n,i)=>corDim(n,i),null,metaDe('carregamento',null)); return true; }, 'Sem dados de carregamento'));
+  }else if(page.kind==='prod'){
     const grid=document.createElement('div'); grid.className='tvgrid'; stage.appendChild(grid);
     const d=state.descarga.filter(matchDate), c=state.carregamento.filter(matchDate);
     grid.appendChild(prodCard('Descarga · por cliente', {label:'Produtividade', value:fmtDec(prodValue(d))}, {color:'var(--cyan)'},
@@ -1764,6 +2056,27 @@ function loadDemoProd(){
   ];
   state.carregamento = C.map(r=>({rota:r.dim, date:r.date, ym:r.ym, vol:r.vol, hours:r.hours, pessoas:r.pessoas, iniStr:r.iniStr, fimStr:r.fimStr}));
 }
+function loadDemoCdc(){
+  // [cliente, data, turno, início, término, pessoas]  → produtividade = 1/(dur·SE(pes>2;pes;1))
+  const mk=(cli,dt,tur,ini,fim,p)=>{ const d=parseDate(dt); const h=durHoras(parseTimeFrac(ini),parseTimeFrac(fim));
+    const f=p>2?p:1;
+    return {cliente:cli.toUpperCase(), rota:cli.toUpperCase(), turno:tur, date:d, ym:ymKey(d),
+            vol:1, hours:h, pessoas:f, pessoasReais:p, iniStr:ini, fimStr:fim}; };
+  const build=(seed)=>({
+    descarga:[
+      mk('GM','2026-09-01','1º','07:20','07:40',seed), mk('GM','2026-09-01','2º','16:00','16:35',seed+1),
+      mk('RENAULT','2026-09-02','1º','09:00','09:48',2), mk('GM','2026-09-02','2º','15:00','15:15',4),
+      mk('RENAULT','2026-09-03','1º','08:10','08:55',1),
+    ],
+    carregamento:[
+      mk('GM','2026-09-01','1º','09:20','09:46',1), mk('RENAULT','2026-09-01','2º','17:10','18:15',2),
+      mk('GM','2026-09-02','1º','11:00','11:56',3), mk('RENAULT','2026-09-03','2º','18:00','18:40',2),
+    ],
+  });
+  state.cdc.milkrun  = build(2);
+  state.cdc.linehaul = build(3);
+  console.log('[CDC] modo demonstração');
+}
 
 /* ================= UTIL/EVENTOS ================= */
 const pad=(n)=>String(n).padStart(2,'0');
@@ -1783,6 +2096,11 @@ function resetAnoMes(){ state.filtro.ano='TODOS'; state.filtro.mes='TODOS';
 
 document.getElementById('fCliente').addEventListener('change',e=>{state.filtro.cliente=e.target.value; render();});
 document.getElementById('fRota').addEventListener('change',e=>{state.filtro.rota=e.target.value; render();});
+document.getElementById('fTurno').addEventListener('change',e=>{state.filtro.turno=e.target.value; render();});
+document.getElementById('fCdcOrigem').addEventListener('change',e=>{
+  state.cdcOrigem=e.target.value; state.filtro.cliente='TODOS'; state.filtro.turno='TODOS';
+  buildDerived(); populateFilters(); render();
+});
 document.getElementById('fAno').addEventListener('change',e=>{state.filtro.ano=e.target.value; clearRange(); render();});
 document.getElementById('fMes').addEventListener('change',e=>{state.filtro.mes=e.target.value; clearRange(); render();});
 $de.addEventListener('change',e=>{ state.filtro.de=e.target.value; resetAnoMes(); render(); });
@@ -1798,15 +2116,56 @@ document.getElementById('btnLabels').addEventListener('click',e=>{
   render();
 });
 document.getElementById('btnHoje').addEventListener('click',()=>{
-  state.filtro={cliente:'TODOS',rota:'TODOS',ano:'TODOS',mes:'TODOS',periodo:state.filtro.periodo,de:'',ate:''};
+  state.filtro={cliente:'TODOS',rota:'TODOS',ano:'TODOS',mes:'TODOS',periodo:state.filtro.periodo,de:'',ate:'',turno:'TODOS'};
   $de.value=''; $ate.value='';
   populateFilters(); render();
 });
-document.getElementById('btnTv').addEventListener('click',toggleTv);
+document.getElementById('btnTv').addEventListener('click',()=>{
+  if(state.tv.on){ toggleTv(); return; }
+  openPick('Exibir no modo TV', 'o que rotacionar na apresentação', [
+    {v:'XD',    t:'XD',    s:'Volumes + Produtividade do XD'},
+    {v:'CDC',   t:'CDC',   s:'Produtividade CDC (Milkrun + Line Haul)'},
+    {v:'AMBOS', t:'Ambos', s:'XD e CDC no mesmo rodízio'},
+  ], state.tv.alvo, (v)=>{ state.tv.alvo=v; closePick(); toggleTv(); });
+});
 document.getElementById('btnTvExit').addEventListener('click',toggleTv);
 document.getElementById('btnClose').addEventListener('click',closeModal);
 document.getElementById('overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeModal();});
 document.getElementById('btnExport').addEventListener('click',exportXlsx);
+
+/* ===== Modal de escolha (troca XD/CDC e alvo do modo TV) ===== */
+let pickCb=null;
+function openPick(title, sub, opts, atual, cb){
+  pickCb=cb;
+  document.getElementById('pickTitle').textContent=title;
+  document.getElementById('pickSub').textContent=sub||'';
+  document.getElementById('pickGrid').innerHTML=opts.map(o=>
+    `<button class="pickbtn ${o.v===atual?'on':''}" data-v="${o.v}">${o.t}${o.s?`<small>${o.s}</small>`:''}</button>`).join('');
+  document.getElementById('pickOverlay').classList.add('show');
+}
+function closePick(){ document.getElementById('pickOverlay').classList.remove('show'); pickCb=null; }
+document.getElementById('pickClose').addEventListener('click',closePick);
+document.getElementById('pickOverlay').addEventListener('click',e=>{ if(e.target.id==='pickOverlay') closePick(); });
+document.getElementById('pickGrid').addEventListener('click',e=>{
+  const b=e.target.closest('.pickbtn'); if(!b || !pickCb) return;
+  pickCb(b.dataset.v);
+});
+function abrirTrocaScope(){
+  if(state.tv.on) return;
+  openPick('Escolher scorecard', 'a operação exibida no painel', [
+    {v:'XD',  t:'XD Diadema',  s:'Cross Docking · Volumes, Produtividade e Plano'},
+    {v:'CDC', t:'CDC Diadema', s:'Produtividade Milkrun / Line Haul e Plano'},
+  ], state.scope, (v)=>{
+    closePick();
+    if(v===state.scope) return;
+    state.scope=v;
+    if(v==='CDC' && state.view==='volumes') state.view='prod';
+    state.filtro.cliente='TODOS'; state.filtro.turno='TODOS'; state.filtro.rota='TODOS';
+    document.getElementById('fCdcOrigem').value=state.cdcOrigem;
+    buildDerived(); populateFilters(); render();
+  });
+}
+document.querySelector('.brand h1').addEventListener('click',abrirTrocaScope);
 
 // Plano de Ação
 document.getElementById('btnAddPlano').addEventListener('click',()=>openPlanoForm(null));
@@ -1820,6 +2179,7 @@ document.getElementById('planoBody').addEventListener('click',e=>{
 });
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape') return;
+  if(document.getElementById('pickOverlay').classList.contains('show')){ closePick(); return; }
   if(document.getElementById('planoOverlay').classList.contains('show')){ closePlanoForm(); return; }
   if(document.getElementById('overlay').classList.contains('show')) closeModal();
   else if(state.tv.on) toggleTv();
