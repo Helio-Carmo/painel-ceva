@@ -1399,12 +1399,21 @@ function prodOpts(){
   o.scales.y.ticks.callback=(v)=> fmtDec(v);
   return o;
 }
+// a linha de meta só é desenhada se cair dentro da escala do eixo Y (targetLinePlugin ~L516);
+// como o eixo se ajusta pela altura das barras (+grace), uma meta bem acima dos dados ficava fora
+// da escala e a linha some. Aqui forçamos o eixo a se esticar até a meta quando ela for o maior valor.
+function applyTargetScale(opts, target, data){
+  if(target==null || isNaN(target)) return;
+  opts.plugins.targetLine={value:target};
+  const maxData = data.length ? Math.max(...data) : 0;
+  if(target > maxData) opts.scales.y.suggestedMax = target*1.15;
+}
 function makeEntityChart(canvas, pairs, colorFn, onBarClick, target){
   const labels=pairs.map(p=>p[0]), data=pairs.map(p=>p[1]);
   const sz=barSizing(labels.length);
   const colors=pairs.map((p,i)=> colorFn(p[0], i));
   const opts=prodOpts();
-  if(target!=null) opts.plugins.targetLine={value:target};
+  applyTargetScale(opts, target, data);
   if(onBarClick){
     opts.onClick=(e,els)=>{ if(els.length) onBarClick(labels[els[0].index]); };
     opts.onHover=(e,els)=>{ e.native.target.style.cursor = els.length?'pointer':'default'; };
@@ -1417,7 +1426,7 @@ function makeEntityChart(canvas, pairs, colorFn, onBarClick, target){
 function makePeriodChart(canvas, labels, data, color, target){
   const sz=barSizing(labels.length);
   const opts=prodOpts();
-  if(target!=null) opts.plugins.targetLine={value:target};
+  applyTargetScale(opts, target, data);
   const ch=new Chart(canvas,{type:'bar',data:{labels,datasets:[
       {data,backgroundColor:color,borderRadius:4,maxBarThickness:sz.thick,categoryPercentage:sz.cat,barPercentage:sz.bar}]},
     options:opts});
